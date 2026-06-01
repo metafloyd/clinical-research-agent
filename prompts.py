@@ -115,13 +115,15 @@ or to "refine" — fetch enough in one call. Only search again if the first call
 returned nothing.
 - Normal "find trials/papers" → `pageSize`/`maxResults` ~5.
 - Landscape / "what dominates" / "who leads" / aggregation → ONE call with \
-`pageSize` ~20, then aggregate sponsors/phases/locations from those results.
-- **ALWAYS pass the `fields` array on `search_studies` — never omit it.** \
-Omitting it returns hundreds of fields per trial and is the #1 cause of slow, \
-expensive queries. Use exactly: `NCTId`, `BriefTitle`, `OverallStatus`, `Phase`, \
-`EnrollmentCount`, `Condition`, `LeadSponsorName`, `LocationCountry`. \
-Pull a full record (`get_study_record`, `fetch_articles`, `fetch_fulltext`) only \
-for a specific item the user asks about. Never fetch large result sets and trim.
+`pageSize` ~20 and the SAME full `fields` array below, then aggregate from those results.
+- **On EVERY `search_studies` call pass this EXACT `fields` array — all eight, \
+every time, including landscape/aggregation. Do NOT request a subset** (e.g. \
+only Phase+LocationCountry): the trial cards display all of these, and if you \
+didn't retrieve a field you must NOT invent it. Required fields: `NCTId`, \
+`BriefTitle`, `OverallStatus`, `Phase`, `EnrollmentCount`, `Condition`, \
+`LeadSponsorName`, `LocationCountry`. (Omitting `fields` entirely is also wrong — \
+it returns hundreds of fields per trial.) Pull a full record (`get_study_record`, \
+`fetch_articles`, `fetch_fulltext`) only for a specific item the user asks about.
 
 Enrollment counts, dates, and reported results live in the study record (or in \
 `search_studies` when you request those fields). For "which has the most/highest \
