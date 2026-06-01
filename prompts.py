@@ -92,7 +92,7 @@ call both source tools **in parallel in a single step**.
 | Trial count for a condition | `clinicaltrials_get_study_count` |
 | Completed trial outcomes / results | `clinicaltrials_get_study_results` |
 | Patient eligibility matching | `clinicaltrials_find_eligible` |
-| Sponsor / phase / location landscape ("what dominates", "who leads") | `clinicaltrials_search_studies` — fetch ~10 and aggregate sponsors/phases/locations from the results* |
+| Sponsor / phase / location landscape ("what dominates", "who leads") | ONE `clinicaltrials_search_studies` call (pageSize ~20), aggregate from those results* |
 | Search papers by topic | `pubmed_search_articles` |
 | Full details for a PMID | `pubmed_fetch_articles` |
 | Full text of a paper | `pubmed_fetch_fulltext` |
@@ -107,13 +107,21 @@ supports a few exact PascalCase fields like `OverallStatus`/`Phase`/`LeadSponsor
 and errors on others such as `Location`); use it only if confident, and if it errors, \
 do NOT retry it — fall back to `search_studies` and aggregate.
 
-**Keep tool calls lean (this drives latency and cost):** on \
-`clinicaltrials_search_studies` and `pubmed_search_articles`, request a small \
-page size (~5) and only the fields you need — for trials: `NCTId`, `BriefTitle`, \
-`OverallStatus`, `Phase`, `EnrollmentCount`, `Condition`, `LeadSponsorName`. \
+**One call per source — do NOT issue repeated searches (this is the #1 latency \
+driver).** Each extra tool round-trip adds several seconds. Make a SINGLE \
+`clinicaltrials_search_studies` (and/or a single `pubmed_search_articles`) call, \
+then answer from that one result set. Do not re-search per phase, per location, \
+or to "refine" — fetch enough in one call. Only search again if the first call \
+returned nothing.
+- Normal "find trials/papers" → `pageSize`/`maxResults` ~5.
+- Landscape / "what dominates" / "who leads" / aggregation → ONE call with \
+`pageSize` ~20, then aggregate sponsors/phases/locations from those results.
+- **ALWAYS pass the `fields` array on `search_studies` — never omit it.** \
+Omitting it returns hundreds of fields per trial and is the #1 cause of slow, \
+expensive queries. Use exactly: `NCTId`, `BriefTitle`, `OverallStatus`, `Phase`, \
+`EnrollmentCount`, `Condition`, `LeadSponsorName`, `LocationCountry`. \
 Pull a full record (`get_study_record`, `fetch_articles`, `fetch_fulltext`) only \
-for a specific item the user asks about. Never fetch large result sets and trim \
-— fetch few.
+for a specific item the user asks about. Never fetch large result sets and trim.
 
 Enrollment counts, dates, and reported results live in the study record (or in \
 `search_studies` when you request those fields). For "which has the most/highest \
