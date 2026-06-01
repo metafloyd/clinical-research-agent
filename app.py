@@ -102,6 +102,27 @@ _shared_agent = None
 _agent_lock = asyncio.Lock()
 
 
+def _make_tools_resilient(tools):
+    """Wrap each MCP tool so a tool error returns a readable message instead of
+    raising — an unhandled ToolException otherwise crashes the whole agent run
+    (e.g. get_field_values 'Unsupported field type'). With this, the model sees
+    the error and can recover (retry with a valid field or use search_studies)."""
+    for t in tools:
+        orig = getattr(t, "coroutine", None)
+        if orig is None:
+            continue
+        async def _wrapped(*args, _orig=orig, _name=t.name, **kwargs):
+            try:
+                return await _orig(*args, **kwargs)
+            except Exception as e:
+                _log.warning("Tool %s error (recovered): %r", _name, e)
+                return (f"Tool '{_name}' returned an error: {e}. Do not retry it the "
+                        f"same way — use clinicaltrials_search_studies instead and "
+                        f"aggregate from the results.")
+        t.coroutine = _wrapped
+    return tools
+
+
 async def _ensure_agent():
     """Build the shared agent once (MCP tools fetched once per server lifetime).
     Concurrency-safe so a background warm-up and the first message can't double-build.
@@ -117,7 +138,7 @@ async def _ensure_agent():
                 "clinicaltrials": {"url": CLINICALTRIALS_MCP_URL, "transport": "streamable_http"},
                 "pubmed":         {"url": PUBMED_MCP_URL,         "transport": "streamable_http"},
             })
-            mcp_tools = await client.get_tools()
+            mcp_tools = _make_tools_resilient(await client.get_tools())
             _shared_agent = create_react_agent(model, mcp_tools, prompt=SYSTEM_PROMPT)
             _log.info("Agent initialised with %d tools", len(mcp_tools))
     return _shared_agent

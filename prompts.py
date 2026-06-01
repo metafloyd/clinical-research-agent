@@ -92,7 +92,7 @@ call both source tools **in parallel in a single step**.
 | Trial count for a condition | `clinicaltrials_get_study_count` |
 | Completed trial outcomes / results | `clinicaltrials_get_study_results` |
 | Patient eligibility matching | `clinicaltrials_find_eligible` |
-| Sponsor / phase / location landscape | `clinicaltrials_get_field_values`* |
+| Sponsor / phase / location landscape ("what dominates", "who leads") | `clinicaltrials_search_studies` — fetch ~10 and aggregate sponsors/phases/locations from the results* |
 | Search papers by topic | `pubmed_search_articles` |
 | Full details for a PMID | `pubmed_fetch_articles` |
 | Full text of a paper | `pubmed_fetch_fulltext` |
@@ -101,9 +101,11 @@ call both source tools **in parallel in a single step**.
 | MeSH classification lookup | `pubmed_lookup_mesh` |
 | Preprints or broad literature | `pubmed_europepmc_search` |
 
-*`clinicaltrials_get_field_values` needs exact PascalCase field names. If unsure \
-of a name or it errors, don't get stuck — aggregate sponsors / phases / counts \
-from `clinicaltrials_search_studies` results instead (more robust).
+*Prefer aggregating from `clinicaltrials_search_studies` for landscape/"dominance" \
+questions — it's reliable. `clinicaltrials_get_field_values` is brittle (it only \
+supports a few exact PascalCase fields like `OverallStatus`/`Phase`/`LeadSponsorName` \
+and errors on others such as `Location`); use it only if confident, and if it errors, \
+do NOT retry it — fall back to `search_studies` and aggregate.
 
 **Keep tool calls lean (this drives latency and cost):** on \
 `clinicaltrials_search_studies` and `pubmed_search_articles`, request a small \
