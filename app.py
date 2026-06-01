@@ -74,40 +74,76 @@ async def set_starters():
 _shared_agent = None
 
 
+async def _ensure_agent():
+    """Build the shared agent once (MCP tools fetched once per server lifetime)."""
+    global _shared_agent
+    if _shared_agent is None:
+        client = MultiServerMCPClient({
+            "clinicaltrials": {"url": CLINICALTRIALS_MCP_URL, "transport": "streamable_http"},
+            "pubmed":         {"url": PUBMED_MCP_URL,         "transport": "streamable_http"},
+        })
+        mcp_tools = await client.get_tools()
+        _shared_agent = create_react_agent(model, mcp_tools, prompt=SYSTEM_PROMPT)
+        _log.info("Agent initialised with %d tools", len(mcp_tools))
+    return _shared_agent
+
+
+def _first_name(user) -> str:
+    email = user.identifier if user else ""
+    meta = (user.metadata or {}) if user else {}
+    return meta.get("given_name") or meta.get("name") or email.split("@")[0].capitalize()
+
+
+async def _new_db_session(user) -> str:
+    """Upsert the user and open a fresh chat_sessions row (off the event loop)."""
+    email = user.identifier if user else ""
+    uid = await asyncio.to_thread(upsert_user, email=email, display_name=_first_name(user))
+    return await asyncio.to_thread(create_session, uid)
+
+
 # ── Session start ──────────────────────────────────────────────────────────────
 
 @cl.on_chat_start
 async def on_chat_start():
-    global _shared_agent
-
     user = cl.user_session.get("user")
-    email = user.identifier if user else ""
-    meta = (user.metadata or {}) if user else {}
-    first_name = meta.get("given_name") or meta.get("name") or email.split("@")[0].capitalize()
-
-    # Supabase SDK is synchronous — run off the event loop so it doesn't block
-    # other sessions' streaming during the HTTP round trip.
-    uid = await asyncio.to_thread(upsert_user, email=email, display_name=first_name)
-    sid = await asyncio.to_thread(create_session, uid)  # auto-generated ID, no FK conflicts
-
-    cl.user_session.set("db_session_id", sid)
+    try:
+        cl.user_session.set("db_session_id", await _new_db_session(user))
+    except Exception as exc:
+        _log.error("on_chat_start db init failed (non-fatal): %r", exc)
     cl.user_session.set("lc_messages", [])
     cl.user_session.set("turn", 0)
+    try:
+        cl.user_session.set("agent", await _ensure_agent())
+    except Exception as exc:
+        _log.error("on_chat_start agent init failed: %r", exc)
+        raise
 
-    if _shared_agent is None:
-        try:
-            client = MultiServerMCPClient({
-                "clinicaltrials": {"url": CLINICALTRIALS_MCP_URL, "transport": "streamable_http"},
-                "pubmed":         {"url": PUBMED_MCP_URL,         "transport": "streamable_http"},
-            })
-            mcp_tools = await client.get_tools()
-            _shared_agent = create_react_agent(model, mcp_tools, prompt=SYSTEM_PROMPT)
-            _log.info("Agent initialised with %d tools", len(mcp_tools))
-        except Exception as exc:
-            _log.error("on_chat_start failed: %r", exc)
-            raise
 
-    cl.user_session.set("agent", _shared_agent)
+# ── Session resume (page reload) ────────────────────────────────────────────────
+# Chainlit calls this on reload INSTEAD of on_chat_start. Without it, persisted
+# threads render read-only. Rebuild the backend session state so the user can
+# continue: re-attach the agent, restore lc_messages from the persisted steps.
+
+@cl.on_chat_resume
+async def on_chat_resume(thread):
+    try:
+        cl.user_session.set("agent", await _ensure_agent())
+
+        lc = []
+        for step in thread.get("steps", []):
+            out = step.get("output") or ""
+            if not out:
+                continue
+            if step.get("type") == "user_message":
+                lc.append(HumanMessage(content=out))
+            elif step.get("type") == "assistant_message":
+                lc.append(AIMessage(content=out))
+        cl.user_session.set("lc_messages", lc)
+        cl.user_session.set("turn", len(lc) // 2)
+
+        cl.user_session.set("db_session_id", await _new_db_session(cl.user_session.get("user")))
+    except Exception as exc:
+        _log.error("on_chat_resume failed: %r", exc)
 
 
 # ── Message handler ────────────────────────────────────────────────────────────
