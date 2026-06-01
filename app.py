@@ -1,4 +1,5 @@
 import asyncio
+import os
 import re
 import random
 from typing import Optional
@@ -30,6 +31,32 @@ from db import (
 from prompts import SYSTEM_PROMPT
 from questions import QUESTION_POOL
 from research_agent import model
+
+
+# ── Data layer patch ────────────────────────────────────────────────────────
+# Chainlit's ChainlitDataLayer.create_step auto-creates a placeholder parent
+# "run" step WITHOUT a threadId when a child step's parent isn't persisted yet
+# (chainlit_data_layer.py:330-343), violating the NOT NULL constraint on
+# Step.threadId — which silently drops steps, so resumed threads lose messages.
+# Backfill the threadId from the active session before delegating to Chainlit.
+if os.getenv("DATABASE_URL"):
+    from chainlit.context import context as _cl_context
+    from chainlit.data.chainlit_data_layer import ChainlitDataLayer
+
+    class _PatchedDataLayer(ChainlitDataLayer):
+        async def create_step(self, step_dict):
+            if not step_dict.get("threadId"):
+                try:
+                    tid = _cl_context.session.thread_id
+                    if tid:
+                        step_dict["threadId"] = tid
+                except Exception:
+                    pass
+            return await super().create_step(step_dict)
+
+    @cl.data_layer
+    def _get_data_layer():
+        return _PatchedDataLayer(database_url=os.environ["DATABASE_URL"])
 
 
 _CT_KEYWORDS = {"clinical", "trial", "nct", "study"}
@@ -72,19 +99,27 @@ async def set_starters():
 # Module-level agent singleton — MCP tools fetched once per server lifetime,
 # not on every session start. Eliminates 15-20s reload latency.
 _shared_agent = None
+_agent_lock = asyncio.Lock()
 
 
 async def _ensure_agent():
-    """Build the shared agent once (MCP tools fetched once per server lifetime)."""
+    """Build the shared agent once (MCP tools fetched once per server lifetime).
+    Concurrency-safe so a background warm-up and the first message can't double-build.
+    NEVER await this inside on_chat_start/on_chat_resume — those run in the websocket
+    connection path, and a cold ~15s build there blocks the socket and triggers a
+    reload loop. Warm it in the background there; await it only in handle_query."""
     global _shared_agent
-    if _shared_agent is None:
-        client = MultiServerMCPClient({
-            "clinicaltrials": {"url": CLINICALTRIALS_MCP_URL, "transport": "streamable_http"},
-            "pubmed":         {"url": PUBMED_MCP_URL,         "transport": "streamable_http"},
-        })
-        mcp_tools = await client.get_tools()
-        _shared_agent = create_react_agent(model, mcp_tools, prompt=SYSTEM_PROMPT)
-        _log.info("Agent initialised with %d tools", len(mcp_tools))
+    if _shared_agent is not None:
+        return _shared_agent
+    async with _agent_lock:
+        if _shared_agent is None:
+            client = MultiServerMCPClient({
+                "clinicaltrials": {"url": CLINICALTRIALS_MCP_URL, "transport": "streamable_http"},
+                "pubmed":         {"url": PUBMED_MCP_URL,         "transport": "streamable_http"},
+            })
+            mcp_tools = await client.get_tools()
+            _shared_agent = create_react_agent(model, mcp_tools, prompt=SYSTEM_PROMPT)
+            _log.info("Agent initialised with %d tools", len(mcp_tools))
     return _shared_agent
 
 
@@ -112,11 +147,8 @@ async def on_chat_start():
         _log.error("on_chat_start db init failed (non-fatal): %r", exc)
     cl.user_session.set("lc_messages", [])
     cl.user_session.set("turn", 0)
-    try:
-        cl.user_session.set("agent", await _ensure_agent())
-    except Exception as exc:
-        _log.error("on_chat_start agent init failed: %r", exc)
-        raise
+    # Warm the agent in the background — do NOT await (would block the connection).
+    asyncio.create_task(_ensure_agent())
 
 
 # ── Session resume (page reload) ────────────────────────────────────────────────
@@ -127,7 +159,10 @@ async def on_chat_start():
 @cl.on_chat_resume
 async def on_chat_resume(thread):
     try:
-        cl.user_session.set("agent", await _ensure_agent())
+        # Warm the agent in the background — do NOT await here. on_chat_resume is
+        # awaited inline in the websocket connection handler, so a cold ~15s agent
+        # build would block the socket and cause the frontend reload loop.
+        asyncio.create_task(_ensure_agent())
 
         lc = []
         for step in thread.get("steps", []):
@@ -154,12 +189,15 @@ async def on_message(message: cl.Message):
 
 
 async def handle_query(query: str):
-    agent   = cl.user_session.get("agent")
     lc_msgs = cl.user_session.get("lc_messages", [])
     sid     = cl.user_session.get("db_session_id")
     turn    = cl.user_session.get("turn", 0)
 
-    if agent is None:
+    # Build the agent on first message (warmed in the background at chat start/resume).
+    try:
+        agent = await _ensure_agent()
+    except Exception as exc:
+        _log.error("Agent init failed: %r", exc)
         await cl.Message(content="⚠️ Agent failed to start — check server logs.").send()
         return
 
