@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 
 from dotenv import load_dotenv
@@ -14,6 +15,7 @@ from config import (
 from prompts import SYSTEM_PROMPT
 
 load_dotenv()
+_log = logging.getLogger(__name__)
 
 # ── LLM endpoint ──────────────────────────────────────────────────────────────
 
@@ -23,6 +25,41 @@ model = ChatOpenAI(
     temperature=0,
     max_tokens=MAIN_MAX_TOKENS,
 )
+
+
+# ── Shared agent build (used by app.py, evals.py, and the CLI) ──────────────────
+
+def make_tools_resilient(tools):
+    """Wrap each MCP tool so a tool error returns a recoverable message instead of
+    raising and crashing the agent run. MCP tools use response_format=
+    'content_and_artifact' → their coroutine must return a (content, artifact)
+    tuple, so match that shape on error (a bare string raises ValueError)."""
+    for t in tools:
+        orig = getattr(t, "coroutine", None)
+        if orig is None:
+            continue
+        async def _wrapped(*args, _orig=orig, _name=t.name,
+                           _fmt=getattr(t, "response_format", None), **kwargs):
+            try:
+                return await _orig(*args, **kwargs)
+            except Exception as e:
+                _log.warning("Tool %s error (recovered): %r", _name, e)
+                msg = (f"Tool '{_name}' returned an error: {e}. Do not retry it the "
+                       f"same way — use clinicaltrials_search_studies instead and "
+                       f"aggregate from the results.")
+                return (msg, None) if _fmt == "content_and_artifact" else msg
+        t.coroutine = _wrapped
+    return tools
+
+
+async def build_agent():
+    """Build the ReAct agent with resilient MCP tools. Single source of truth."""
+    client = MultiServerMCPClient({
+        "clinicaltrials": {"url": CLINICALTRIALS_MCP_URL, "transport": "streamable_http"},
+        "pubmed":          {"url": PUBMED_MCP_URL,         "transport": "streamable_http"},
+    })
+    tools = make_tools_resilient(await client.get_tools())
+    return create_react_agent(model, tools, prompt=SYSTEM_PROMPT)
 
 # ── CLI runner ────────────────────────────────────────────────────────────────
 
@@ -41,20 +78,8 @@ async def _run_cli(user_input: str, agent) -> None:
 
 
 async def main() -> None:
-    client = MultiServerMCPClient(
-        {
-            "clinicaltrials": {"url": CLINICALTRIALS_MCP_URL, "transport": "streamable_http"},
-            "pubmed":          {"url": PUBMED_MCP_URL,         "transport": "streamable_http"},
-        }
-    )
-    mcp_tools = await client.get_tools()
-    agent = create_react_agent(model, mcp_tools, prompt=SYSTEM_PROMPT)
-
-    ct_tools = [t.name for t in mcp_tools if "clinical" in t.name.lower() or "trial" in t.name.lower()]
-    pm_tools = [t.name for t in mcp_tools if t.name not in ct_tools]
+    agent = await build_agent()
     print(f"{CLINICALTRIALS_MCP_URL.split('/')[2]} — Clinical Research Intelligence Agent\n")
-    print(f"ClinicalTrials tools : {ct_tools}")
-    print(f"PubMed tools         : {pm_tools}\n")
     print("Type 'quit' to exit.\n")
 
     while True:

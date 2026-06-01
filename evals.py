@@ -24,13 +24,10 @@ from collections import Counter
 
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langchain_openai import ChatOpenAI
-from langgraph.prebuilt import create_react_agent
-from langchain_mcp_adapters.client import MultiServerMCPClient
 from langsmith import Client, aevaluate
 
-from config import CLINICALTRIALS_MCP_URL, PUBMED_MCP_URL, MODEL_ID
-from prompts import SYSTEM_PROMPT
-from research_agent import model  # ChatOpenAI(gpt-4o-mini); also runs load_dotenv()
+from config import MODEL_ID
+from research_agent import build_agent  # shared resilient agent; also runs load_dotenv()
 
 DATASET_NAME = "research-assistant-evals"
 
@@ -47,16 +44,7 @@ QUERIES = [
 ]
 
 
-# ── Agent under test (same model + tools + prompt as the live app) ──────────────
-
-async def _build_agent():
-    client = MultiServerMCPClient({
-        "clinicaltrials": {"url": CLINICALTRIALS_MCP_URL, "transport": "streamable_http"},
-        "pubmed":         {"url": PUBMED_MCP_URL,         "transport": "streamable_http"},
-    })
-    tools = await client.get_tools()
-    return create_react_agent(model, tools, prompt=SYSTEM_PROMPT)
-
+# ── Agent under test = the SAME build_agent() the live app uses ─────────────────
 
 def _make_target(agent):
     async def target(inputs: dict) -> dict:
@@ -158,7 +146,7 @@ async def main():
     else:
         print(f"Using existing dataset '{DATASET_NAME}'.")
 
-    agent = await _build_agent()
+    agent = await build_agent()
     results = await aevaluate(
         _make_target(agent),
         data=DATASET_NAME,

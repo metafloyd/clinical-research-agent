@@ -15,22 +15,17 @@ _asyncpg.create_pool = _small_pool
 import logging
 
 import chainlit as cl
-from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_mcp_adapters.client import MultiServerMCPClient
 
 _log = logging.getLogger(__name__)
 
-from config import (
-    CLINICALTRIALS_MCP_URL, PUBMED_MCP_URL, BETA_WHITELIST,
-)
+from config import BETA_WHITELIST
 from db import (
     upsert_user, create_session, set_session_title,
     save_message,
 )
-from prompts import SYSTEM_PROMPT
 from questions import QUESTION_POOL
-from research_agent import model
+from research_agent import build_agent
 
 
 # ── Data layer patch ────────────────────────────────────────────────────────
@@ -102,29 +97,8 @@ _shared_agent = None
 _agent_lock = asyncio.Lock()
 
 
-def _make_tools_resilient(tools):
-    """Wrap each MCP tool so a tool error returns a readable message instead of
-    raising — an unhandled ToolException otherwise crashes the whole agent run
-    (e.g. get_field_values 'Unsupported field type'). With this, the model sees
-    the error and can recover (retry with a valid field or use search_studies)."""
-    for t in tools:
-        orig = getattr(t, "coroutine", None)
-        if orig is None:
-            continue
-        async def _wrapped(*args, _orig=orig, _name=t.name, **kwargs):
-            try:
-                return await _orig(*args, **kwargs)
-            except Exception as e:
-                _log.warning("Tool %s error (recovered): %r", _name, e)
-                return (f"Tool '{_name}' returned an error: {e}. Do not retry it the "
-                        f"same way — use clinicaltrials_search_studies instead and "
-                        f"aggregate from the results.")
-        t.coroutine = _wrapped
-    return tools
-
-
 async def _ensure_agent():
-    """Build the shared agent once (MCP tools fetched once per server lifetime).
+    """Build the shared agent once via research_agent.build_agent() (resilient tools).
     Concurrency-safe so a background warm-up and the first message can't double-build.
     NEVER await this inside on_chat_start/on_chat_resume — those run in the websocket
     connection path, and a cold ~15s build there blocks the socket and triggers a
@@ -134,13 +108,8 @@ async def _ensure_agent():
         return _shared_agent
     async with _agent_lock:
         if _shared_agent is None:
-            client = MultiServerMCPClient({
-                "clinicaltrials": {"url": CLINICALTRIALS_MCP_URL, "transport": "streamable_http"},
-                "pubmed":         {"url": PUBMED_MCP_URL,         "transport": "streamable_http"},
-            })
-            mcp_tools = _make_tools_resilient(await client.get_tools())
-            _shared_agent = create_react_agent(model, mcp_tools, prompt=SYSTEM_PROMPT)
-            _log.info("Agent initialised with %d tools", len(mcp_tools))
+            _shared_agent = await build_agent()
+            _log.info("Agent initialised")
     return _shared_agent
 
 
