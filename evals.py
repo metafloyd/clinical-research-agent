@@ -51,7 +51,7 @@ def _make_target(agent):
         try:
             result = await agent.ainvoke(
                 {"messages": [HumanMessage(content=inputs["query"])]},
-                config={"recursion_limit": 10},
+                config={"recursion_limit": 6},
             )
         except Exception as exc:
             return {"answer": f"ERROR: {exc}", "tool_calls": [], "tool_outputs": []}

@@ -209,7 +209,7 @@ async def handle_query(query: str):
         async for event in agent.astream_events(
             {"messages": ctx_msgs},
             version="v2",
-            config={"recursion_limit": 10},
+            config={"recursion_limit": 6},  # hard cap on the agent loop — bounds runaways
         ):
             kind = event["event"]
             if kind == "on_tool_start":

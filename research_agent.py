@@ -29,11 +29,21 @@ model = ChatOpenAI(
 
 # ── Shared agent build (used by app.py, evals.py, and the CLI) ──────────────────
 
+_MAX_TOOL_CHARS = 8000  # hard cap per tool result — bounds context growth so a
+                        # pagination/aggregation runaway can't explode tokens/cost.
+
+
+def _cap(content):
+    if isinstance(content, str) and len(content) > _MAX_TOOL_CHARS:
+        return content[:_MAX_TOOL_CHARS] + "\n…[truncated — refine the query, do not paginate further]"
+    return content
+
+
 def make_tools_resilient(tools):
-    """Wrap each MCP tool so a tool error returns a recoverable message instead of
-    raising and crashing the agent run. MCP tools use response_format=
-    'content_and_artifact' → their coroutine must return a (content, artifact)
-    tuple, so match that shape on error (a bare string raises ValueError)."""
+    """Wrap each MCP tool to (1) turn tool errors into a recoverable message instead
+    of crashing the run, and (2) cap output size. MCP tools use response_format=
+    'content_and_artifact' → the coroutine must return a (content, artifact) tuple,
+    so match that shape (a bare string raises ValueError)."""
     for t in tools:
         orig = getattr(t, "coroutine", None)
         if orig is None:
@@ -41,13 +51,16 @@ def make_tools_resilient(tools):
         async def _wrapped(*args, _orig=orig, _name=t.name,
                            _fmt=getattr(t, "response_format", None), **kwargs):
             try:
-                return await _orig(*args, **kwargs)
+                result = await _orig(*args, **kwargs)
             except Exception as e:
                 _log.warning("Tool %s error (recovered): %r", _name, e)
                 msg = (f"Tool '{_name}' returned an error: {e}. Do not retry it the "
                        f"same way — use clinicaltrials_search_studies instead and "
                        f"aggregate from the results.")
                 return (msg, None) if _fmt == "content_and_artifact" else msg
+            if _fmt == "content_and_artifact" and isinstance(result, tuple) and len(result) == 2:
+                return (_cap(result[0]), result[1])
+            return _cap(result)
         t.coroutine = _wrapped
     return tools
 
@@ -64,7 +77,10 @@ async def build_agent():
 # ── CLI runner ────────────────────────────────────────────────────────────────
 
 async def _run_cli(user_input: str, agent) -> None:
-    result = await agent.ainvoke({"messages": [HumanMessage(content=user_input)]})
+    result = await agent.ainvoke(
+        {"messages": [HumanMessage(content=user_input)]},
+        config={"recursion_limit": 6},  # same hard cap as the app — bounds runaways
+    )
     for msg in result["messages"][1:]:
         if isinstance(msg, AIMessage):
             if msg.tool_calls:
