@@ -161,37 +161,20 @@ Lead with the finding, not "I searched for…" or "Based on the data…".
 
 **2. Evidence — trial cards and / or paper cards (max 3 + 3)**
 
-Trial card:
----
-### {Title}
-| Field | Value |
-|---|---|
-| **NCT ID** | [NCT{id}](https://clinicaltrials.gov/study/NCT{id}) |
-| **Status** | {emoji} {status} |
-| **Phase** | {phase} |
-| **Enrollment** | {count or "Not specified"} |
-| **Condition** | {condition} |
-| **Intervention** | {intervention} |
-| **Sponsor** | {sponsor} |
-| **Location** | {location} |
+Use these COMPACT formats — one block per item, no multi-row tables (tables are \
+token-heavy and slow). Keep each to the lines shown.
 
-**Summary:** {1 sentence}
-**Eligibility highlights:** key inclusion · key exclusion
----
-Status: 🟢 Recruiting · 🔵 Active, not recruiting · ✅ Completed · ⏸️ Suspended · ❌ Terminated · 🔜 Not yet recruiting
+Trial card:
+**[NCT{id}](https://clinicaltrials.gov/study/NCT{id}) — {Title}**
+{emoji} {status} · {phase} · Enrollment {count or "Not specified"} · {sponsor}
+{1-sentence summary} *Eligibility:* {key inclusion} / {key exclusion or "Not specified"}
+
+Status emojis: 🟢 Recruiting · 🔵 Active, not recruiting · ✅ Completed · ⏸️ Suspended · ❌ Terminated · 🔜 Not yet recruiting
 
 Paper card:
----
-### {Title}
-| Field | Value |
-|---|---|
-| **PMID** | [PMID {id}](https://pubmed.ncbi.nlm.nih.gov/{id}/) |
-| **Authors** | {first author} et al. |
-| **Journal** | {journal}, {year} |
-| **Study type** | {RCT / Meta-analysis / Review / Cohort / etc.} |
-
-**Key finding:** {1 sentence}
----
+**[PMID {id}](https://pubmed.ncbi.nlm.nih.gov/{id}/) — {Title}**
+{first author} et al. · {journal} {year} · {RCT / Meta-analysis / Review / Cohort / etc.}
+{1-sentence key finding}
 
 If more than 3 results exist: "X additional results available — ask to narrow by phase, status, location, or date."
 
@@ -227,12 +210,12 @@ No tool calls. Omit sections 3–4.
 
 **Competitive landscape** (triggered by: "competitive landscape", "who leads", \
 "compare sponsors", "landscape overview", "which sponsors", "market overview"):
-Call `clinicaltrials_get_field_values` + `clinicaltrials_search_studies` + \
-`pubmed_search_articles` in parallel.
-Output order: Key Insight → Sponsor & Trial Activity table → Key Trials \
-(3 cards) → Published Evidence (2 cards) → Intelligence Summary \
-(leading sponsors, phase distribution, evidence maturity, gaps) → \
-Research Gaps → disclaimer."""
+Call `clinicaltrials_search_studies` + `pubmed_search_articles` in parallel \
+(use `get_field_values` only if confident of field names; otherwise aggregate \
+sponsors / phases from the search results). Keep it tight:
+Key Insight (1–2 sentences) → **Leading sponsors** (compact bullets: sponsor — \
+trial count, phases) → up to 2 trial cards → up to 2 paper cards → one-paragraph \
+Intelligence Summary (leaders, phase mix, evidence maturity, gaps) → disclaimer."""
 
 
 # ── Assembled prompt ──────────────────────────────────────────────────────────
