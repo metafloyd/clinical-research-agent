@@ -64,18 +64,30 @@ a { color: #1F497D !important; }
 /* ── Hide logo image on splash, greeting takes its place ───────────────── */
 #welcome-screen img { display: none !important; }
 
-/* ── Push welcome screen content below the header ──────────────────────── */
-#welcome-screen { padding-top: 40px !important; }
+/* ── Welcome screen: anchor content to the TOP, not vertically centered ──── */
+/* Chainlit centers #welcome-screen vertically, so its position drifted with the
+   sidebar state (narrower area → starters wrap to more lines → taller block →
+   greeting pushed up under the ribbon). Anchoring to the top with a fixed
+   padding keeps the greeting at a stable, healthy distance from the ribbon
+   regardless of sidebar expand/collapse or starter wrapping. */
+#welcome-screen {
+    justify-content: flex-start !important;
+    padding-top: 44px !important;
+}
+#cl-greeting { margin-top: 28px !important; }       /* override JS inline 40px */
+#cl-greeting-sub { margin-bottom: 20px !important; }
 
-/* ── Starter pills — allow full text, no truncation ────────────────────── */
+/* ── Starter pills — compact: one-line text, smaller font, tighter padding ─ */
 /* Use #welcome-screen button — stable across Chainlit versions */
 #welcome-screen button,
 [class*="starter"] button, [class*="Starter"] button {
     white-space: normal !important;
     text-align: left !important;
     height: auto !important;
-    min-height: 44px !important;
-    padding: 10px 16px !important;
+    min-height: 0 !important;
+    padding: 7px 12px !important;
+    font-size: 12.5px !important;
+    line-height: 1.35 !important;
 }
 
 /* ── Input placeholder ──────────────────────────────────────────────────── */
