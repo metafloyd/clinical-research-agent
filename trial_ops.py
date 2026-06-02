@@ -253,6 +253,10 @@ SQL: SELECT s.internal_id, s.title, SUM(e.enrolled) AS enrolled, s.target_enroll
      FROM studies s JOIN enrollment e ON e.internal_id = s.internal_id
      GROUP BY s.internal_id ORDER BY pct_of_target ASC;
 
+Q: What is Dr. Raj Patel researching / working on?   -- a PI's research/work = the studies they lead
+SQL: SELECT internal_id, nct_id, title, therapeutic_area, phase, status
+     FROM studies WHERE principal_investigator LIKE '%Raj Patel%';
+
 Q: How many patients have we enrolled at the Rochester site?
 SQL: SELECT si.site_name, SUM(e.enrolled) AS enrolled
      FROM enrollment e JOIN sites si ON si.site_id = e.site_id
@@ -287,6 +291,9 @@ Rules:
 - A vague status question about our work ("how are we doing?", "where do we stand?",
   "give me a status update") = the portfolio enrollment-vs-target summary (per study,
   with % of target).
+- A question about a named INVESTIGATOR — what they research / work on / their focus /
+  which studies they lead — IS in scope: filter `studies` by `principal_investigator
+  LIKE '%<name>%'`. Do NOT return NO_MATCH for a PI who appears in the data.
 - If the question is truly unrelated to our studies/sites/enrollment, return exactly:
   SELECT 'NO_MATCH';"""
 
