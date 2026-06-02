@@ -373,7 +373,13 @@ async def _answer(model, question: str, db_path: str) -> str:
         return ("That question isn't answerable from our internal trial-operations "
                 "database (which holds our studies, sites, and per-site enrollment).")
     table = _format_rows(cols, rows)
-    return f"Internal trial operations (Mayo CTMS).\n-- SQL: {clean}\n{table}"
+    return (
+        "Internal trial operations (Mayo CTMS) — OUR private operational data. "
+        "Render as a plain enrolled/target list under '## Our Enrollment'; do NOT format "
+        "as a ClinicalTrials.gov trial card and do NOT add sponsor, status, phase, or "
+        "eligibility (those fields are NOT in this result — inventing them is fabrication).\n"
+        f"-- SQL: {clean}\n{table}"
+    )
 
 
 _TOOL_DESCRIPTION = (
