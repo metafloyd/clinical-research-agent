@@ -42,22 +42,45 @@
         } catch (e) {}
     }
 
-    function hideThemeToggle() {
+    // The app is themed for LIGHT mode only (brand is Mayo blue on light); dark mode
+    // renders half-broken. So: force light + hide the toggle (also rescues any session
+    // already stuck in dark from a prior toggle).
+    function forceLightTheme() {
+        try {
+            ['theme', 'vite-ui-theme', 'ui-theme'].forEach(function(k) {
+                if (localStorage.getItem(k) && localStorage.getItem(k) !== 'light') {
+                    localStorage.setItem(k, 'light');
+                }
+            });
+        } catch (e) {}
+        var html = document.documentElement;
+        html.classList.remove('dark');
+        html.classList.add('light');
+        html.setAttribute('data-theme', 'light');
+        try { html.style.colorScheme = 'light'; } catch (e) {}
+        // Belt-and-suspenders: also hide the toggle button by icon/label.
         var header = document.getElementById('header');
-        if (!header) return;
-        header.querySelectorAll('button').forEach(function(btn) {
-            var svg = btn.querySelector('svg');
-            if (!svg) return;
-            var testId = (svg.getAttribute('data-testid') || '').toLowerCase();
-            var label = (btn.getAttribute('aria-label') || btn.getAttribute('title') || '').toLowerCase();
-            if (testId.includes('mode') || label.includes('theme') || label.includes('dark') || label.includes('light')) {
-                btn.style.display = 'none';
-            }
-        });
+        if (header) {
+            header.querySelectorAll('button').forEach(function(btn) {
+                var svg = btn.querySelector('svg');
+                var testId = (svg && svg.getAttribute('data-testid') || '').toLowerCase();
+                var label = (btn.getAttribute('aria-label') || btn.getAttribute('title') || '').toLowerCase();
+                if (testId.includes('mode') || label.includes('theme') ||
+                    label.includes('dark') || label.includes('light')) {
+                    btn.style.display = 'none';
+                }
+            });
+        }
     }
-    hideThemeToggle();
-    setTimeout(hideThemeToggle, 500);
-    setTimeout(hideThemeToggle, 2000);
+    forceLightTheme();
+    setTimeout(forceLightTheme, 500);
+    setTimeout(forceLightTheme, 2000);
+    // Re-assert light if anything flips <html> back to dark.
+    try {
+        new MutationObserver(function() {
+            if (document.documentElement.classList.contains('dark')) forceLightTheme();
+        }).observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+    } catch (e) {}
 
     function _nameFromEmail(email) {
         if (!email || !email.includes('@')) return '';
@@ -190,7 +213,7 @@
         injectGreeting();
         injectDataSourceBadge();
         applyUserName();
-        hideThemeToggle();
+        forceLightTheme();
         setPlaceholder();
         wireAudio();
         var streaming = !!document.getElementById('stop-button');

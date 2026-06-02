@@ -22,13 +22,14 @@ img[alt*="Chainlit"],
 [class*="watermark"],
 [class*="brand-logo"] { display: none !important; }
 
-/* ── Hide theme toggle ───────────────────────────────────────────────────── */
-header button[aria-label*="theme" i],
-header button[aria-label*="dark" i],
-header button[aria-label*="light" i],
-header svg[data-testid="LightModeIcon"] + *,
-header svg[data-testid="DarkModeIcon"] + *,
-header button:has(svg[data-testid$="ModeIcon"]) { display: none !important; }
+/* ── Hide the theme toggle (app is light-only; dark mode is not themed) ───── */
+#theme-toggle,
+[data-testid="theme-toggle"],
+[id="theme-toggle"],
+#header button[aria-label*="theme" i],
+#header button[aria-label*="dark" i],
+#header button[aria-label*="light" i],
+#header button:has(svg[data-testid$="ModeIcon"]) { display: none !important; }
 
 /* ── Typography ─────────────────────────────────────────────────────────── */
 *, *::before, *::after { font-family: inherit !important; box-sizing: border-box; }
