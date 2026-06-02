@@ -372,13 +372,17 @@ async def _answer(model, question: str, db_path: str) -> str:
     if rows == [("NO_MATCH",)]:
         return ("That question isn't answerable from our internal trial-operations "
                 "database (which holds our studies, sites, and per-site enrollment).")
+    # Log the generated SQL for debugging / traceability — but do NOT surface it to
+    # the model/UI (the end user has no need to see the raw query; it only clutters
+    # the response and the model tends to echo it). LangSmith also captures it.
+    _log.info("query_trial_operations SQL: %s", clean)
     table = _format_rows(cols, rows)
     return (
         "Internal trial operations (Mayo CTMS) — OUR private operational data. "
         "Render as a plain enrolled/target list under '## Our Enrollment'; do NOT format "
         "as a ClinicalTrials.gov trial card and do NOT add sponsor, status, phase, or "
         "eligibility (those fields are NOT in this result — inventing them is fabrication).\n"
-        f"-- SQL: {clean}\n{table}"
+        f"{table}"
     )
 
 

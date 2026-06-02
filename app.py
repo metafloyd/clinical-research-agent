@@ -213,7 +213,13 @@ async def handle_query(query: str):
         ):
             kind = event["event"]
             if kind == "on_tool_start":
-                badge = "🏥" if _is_ct_tool(event["name"]) else "📚"
+                _tname = event["name"]
+                if _tname == "query_trial_operations":
+                    badge = "🔍"                       # internal DB query
+                elif _is_ct_tool(_tname):
+                    badge = "🏥"                       # ClinicalTrials.gov
+                else:
+                    badge = "📚"                       # PubMed
                 try:
                     async with cl.Step(name=f"{badge} {event['name']}", type="tool"):
                         pass
