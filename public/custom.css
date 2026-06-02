@@ -116,6 +116,40 @@ textarea::placeholder {
 }
 #cl-datasource-badge .cl-dot { opacity: 0.5; }
 
+/* ── Thread-history sidebar — themed to the app (shadcn Sidebar) ─────────── */
+/* Stable hooks confirmed in the built frontend: the sidebar shell is
+   [data-sidebar="sidebar"], the thread list lives under #thread-history, each
+   chat is [data-sidebar="menu-button"] (active one carries data-active="true"),
+   and the date headers are [data-sidebar="group-label"]. */
+[data-sidebar="sidebar"] {
+    background: #F8FAFD !important;
+    border-right: 1px solid #E6EAF3 !important;
+}
+[data-sidebar="sidebar"] [data-sidebar="group-label"] {
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.06em !important;
+    text-transform: uppercase !important;
+    color: #909AAE !important;
+}
+#thread-history [data-sidebar="menu-button"] {
+    border-radius: 8px !important;
+    font-size: 13.5px !important;
+    color: #3B4256 !important;
+    transition: background .12s ease, color .12s ease !important;
+}
+#thread-history [data-sidebar="menu-button"]:hover {
+    background: rgba(14, 50, 147, 0.06) !important;
+    color: #0E3293 !important;
+}
+/* active / selected chat — Mayo-blue tint + left accent bar */
+#thread-history [data-sidebar="menu-button"][data-active="true"] {
+    background: rgba(14, 50, 147, 0.10) !important;
+    color: #0E3293 !important;
+    font-weight: 600 !important;
+    box-shadow: inset 3px 0 0 0 #0E3293 !important;
+}
+
 /* ── User name on the nav button (replaces the "S" avatar) ─────────────── */
 /* Keep #user-nav-button as the dropdown/logout trigger, but hide the avatar
    circle and render the name via ::after (set from --cl-username in custom.js). */
