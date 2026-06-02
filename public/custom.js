@@ -168,7 +168,7 @@
         if (!header || document.getElementById('cl-datasource-badge')) return;
         var badge = document.createElement('div');
         badge.id = 'cl-datasource-badge';
-        badge.innerHTML = '<span>🏥 ClinicalTrials.gov</span><span class="cl-dot"> · </span><span>📚 PubMed</span>';
+        badge.innerHTML = '<span>🏥 ClinicalTrials.gov</span><span class="cl-dot"> · </span><span>📚 PubMed</span><span class="cl-dot"> · </span><span>🔍 Internal CTMS</span>';
         header.appendChild(badge);
     }
     injectDataSourceBadge();

@@ -109,8 +109,9 @@ textarea::placeholder {
     border: 1px solid rgba(255,255,255,0.2);
     border-radius: 20px;
     padding: 4px 12px;
-    margin-left: auto;
-    margin-right: 12px;
+    /* Data sources on the LEFT (after the toggle/new-chat icons) */
+    order: 1;
+    margin-left: 12px;
     white-space: nowrap;
     letter-spacing: 0.01em;
     pointer-events: none;
@@ -161,6 +162,9 @@ textarea::placeholder {
     border-radius: 6px !important;
     display: inline-flex !important;
     align-items: center !important;
+    /* Account (avatar + name) pinned to the far RIGHT — enterprise norm */
+    order: 2;
+    margin-left: auto !important;
 }
 #user-nav-button > * { display: none !important; }   /* hide default avatar circle */
 /* Google profile photo as a round avatar (set from --cl-userpic in custom.js) */
