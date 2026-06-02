@@ -158,8 +158,25 @@ textarea::placeholder {
     min-width: 0 !important;
     padding: 4px 10px !important;
     border-radius: 6px !important;
+    display: inline-flex !important;
+    align-items: center !important;
 }
-#user-nav-button > * { display: none !important; }   /* hide avatar circle */
+#user-nav-button > * { display: none !important; }   /* hide default avatar circle */
+/* Google profile photo as a round avatar (set from --cl-userpic in custom.js) */
+#user-nav-button::before {
+    content: "";
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-image: var(--cl-userpic);
+    background-size: cover;
+    background-position: center;
+    background-color: rgba(255, 255, 255, 0.15);   /* fallback ring if no photo */
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    margin-right: 8px;
+    flex-shrink: 0;
+}
 #user-nav-button::after {
     content: var(--cl-username, 'Account');
     color: #F9FAFB !important;

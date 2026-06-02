@@ -164,6 +164,10 @@
                 var meta = data.metadata || {};
                 var name = meta.given_name || meta.name || data.identifier || 'Account';
                 document.documentElement.style.setProperty('--cl-username', JSON.stringify(name));
+                // Google profile photo → shown as a round avatar before the name (CSS ::before).
+                if (meta.picture) {
+                    document.documentElement.style.setProperty('--cl-userpic', 'url("' + meta.picture + '")');
+                }
             })
             .catch(function() {});
     }
