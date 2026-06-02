@@ -6,6 +6,9 @@
 venv/
 env/
 
+# Local trial-operations SQLite DB (regenerated deterministically by trial_ops.ensure_db)
+trial_ops.db
+
 # Python cache
 __pycache__/
 *.pyc

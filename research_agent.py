@@ -13,6 +13,7 @@ from config import (
     MODEL_ID, MAIN_MAX_TOKENS,
 )
 from prompts import SYSTEM_PROMPT
+from trial_ops import make_trial_ops_tool, ensure_db
 
 load_dotenv()
 _log = logging.getLogger(__name__)
@@ -55,8 +56,8 @@ def make_tools_resilient(tools):
             except Exception as e:
                 _log.warning("Tool %s error (recovered): %r", _name, e)
                 msg = (f"Tool '{_name}' returned an error: {e}. Do not retry it the "
-                       f"same way — use clinicaltrials_search_studies instead and "
-                       f"aggregate from the results.")
+                       f"same way — adjust the query or use a different tool, then "
+                       f"answer from what you can retrieve.")
                 return (msg, None) if _fmt == "content_and_artifact" else msg
             if _fmt == "content_and_artifact" and isinstance(result, tuple) and len(result) == 2:
                 return (_cap(result[0]), result[1])
@@ -66,12 +67,16 @@ def make_tools_resilient(tools):
 
 
 async def build_agent():
-    """Build the ReAct agent with resilient MCP tools. Single source of truth."""
+    """Build the ReAct agent with resilient MCP tools + the internal trial-operations
+    (NL→SQL) tool. Single source of truth used by app.py, evals.py, and the CLI."""
+    ensure_db()  # create/seed the local SQLite CTMS DB if missing (idempotent)
     client = MultiServerMCPClient({
         "clinicaltrials": {"url": CLINICALTRIALS_MCP_URL, "transport": "streamable_http"},
         "pubmed":          {"url": PUBMED_MCP_URL,         "transport": "streamable_http"},
     })
-    tools = make_tools_resilient(await client.get_tools())
+    mcp_tools = await client.get_tools()
+    sql_tool = make_trial_ops_tool(model)
+    tools = make_tools_resilient([*mcp_tools, sql_tool])
     return create_react_agent(model, tools, prompt=SYSTEM_PROMPT)
 
 # ── CLI runner ────────────────────────────────────────────────────────────────
