@@ -162,8 +162,13 @@ textarea::placeholder {
     border-radius: 6px !important;
     display: inline-flex !important;
     align-items: center !important;
-    /* Account (avatar + name) pinned to the far RIGHT — enterprise norm */
-    order: 2;
+}
+/* The account button is nested in its own header group; pin THAT group far-right
+   (enterprise norm). #header is flex/justify-between with 3 in-flow children
+   [toolbar][account-group][badge]; ordering + margin-left:auto clusters
+   toolbar+badge left and pushes the account group right. */
+#header > div:has(#user-nav-button) {
+    order: 3 !important;
     margin-left: auto !important;
 }
 #user-nav-button > * { display: none !important; }   /* hide default avatar circle */
