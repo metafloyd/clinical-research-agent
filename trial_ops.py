@@ -219,11 +219,11 @@ SQL: SELECT s.internal_id, s.title, SUM(e.enrolled) AS enrolled, s.target_enroll
      FROM studies s JOIN enrollment e ON e.internal_id = s.internal_id
      GROUP BY s.internal_id ORDER BY enrolled DESC;
 
-Q: Which of our sites is furthest behind its enrollment target?
+Q: Which of our sites is furthest behind its enrollment target?   -- "furthest behind" = fill rate, NOT absolute gap
 SQL: SELECT si.site_name, SUM(e.enrolled) AS enrolled, SUM(e.target) AS target,
-     SUM(e.target) - SUM(e.enrolled) AS gap
+     ROUND(SUM(e.enrolled) * 100.0 / SUM(e.target), 1) AS pct_of_target
      FROM enrollment e JOIN sites si ON si.site_id = e.site_id
-     GROUP BY e.site_id ORDER BY gap DESC;
+     GROUP BY e.site_id ORDER BY pct_of_target ASC;
 
 Q: Show our active Phase 3 oncology studies.
 SQL: SELECT internal_id, nct_id, title, status, principal_investigator

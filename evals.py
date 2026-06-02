@@ -26,7 +26,6 @@ from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langsmith import Client, aevaluate
 
-from config import MODEL_ID
 from research_agent import build_agent  # shared resilient agent; also runs load_dotenv()
 
 DATASET_NAME = "research-assistant-evals"
@@ -41,6 +40,13 @@ QUERIES = [
     ("What is a Phase 3 trial?", "definition"),
     ("What tools do you have access to?", "capability"),
     ("What's the weather today?", "offtopic"),
+    # ── Internal trial-operations (NL→SQL) — must route to query_trial_operations
+    #    and stay grounded in the SQL result (no fabricated sponsor/status/etc.) ──
+    ("Which of our studies has the worst enrollment?", "internal"),
+    ("Which of our sites is furthest behind its enrollment target?", "internal"),
+    # ── Cross-source: internal accrual vs. the public landscape. Tests grounding +
+    #    that our numbers aren't conflated with the registry's (the card-fusion bug) ──
+    ("How does our enrollment on the donanemab trial compare to similar trials in the field?", "research"),
 ]
 
 
@@ -95,13 +101,19 @@ def correct_scope(run, example):
         ok = (n_calls == 0) and not redirected
     elif t == "capability":
         ok = not redirected  # should describe capabilities, not deflect
+    elif t == "internal":
+        # must route to the internal NL→SQL tool (not the public registry)
+        ok = ("query_trial_operations" in out.get("tool_calls", [])) and not redirected
     else:  # research / landscape / count
         ok = (n_calls >= 1) and not redirected
     return {"key": "correct_scope", "score": int(ok),
             "comment": f"type={t}, tool_calls={n_calls}, redirected={redirected}"}
 
 
-_judge = ChatOpenAI(model=MODEL_ID, temperature=0, max_tokens=300)
+# Stronger model for the judge: gpt-4o-mini was too naive for nuanced audits
+# (it conflated our internal vs. the registry's enrollment, and re-derived its own
+# "worst study" ranking instead of checking factual support).
+_judge = ChatOpenAI(model="gpt-4o", temperature=0, max_tokens=300)
 
 async def groundedness(run, example):
     """LLM-as-judge: is every factual claim supported by the retrieved tool output?"""
@@ -117,8 +129,19 @@ async def groundedness(run, example):
         "You audit a clinical-research assistant for hallucination.\n\n"
         f"RETRIEVED CONTEXT (the only facts the assistant had):\n{ctx[:9000]}\n\n"
         f"ASSISTANT ANSWER:\n{answer[:4000]}\n\n"
-        "Is EVERY specific factual claim in the answer (NCT IDs, PMIDs, enrollment "
-        "counts, phases, sponsors, statuses, study findings) supported by the context? "
+        "IMPORTANT: the assistant draws on TWO different views that may both appear:\n"
+        "- [query_trial_operations] = OUR institution's internal site-level enrollment "
+        "(e.g. our 61/75).\n"
+        "- [clinicaltrials_*] = the PUBLIC registry's GLOBAL enrollment for the same trial "
+        "(e.g. 1736).\n"
+        "For one NCT these are DIFFERENT numbers and BOTH are correct when each matches its "
+        "own source. Do NOT flag a registry value as wrong just because our internal number "
+        "differs (or vice versa) — only flag a number that matches NEITHER source.\n\n"
+        "Judge ONLY factual support: does each specific value in the answer (NCT IDs, "
+        "PMIDs, enrollment counts, %s, phases, sponsors, statuses, findings) appear in SOME "
+        "source in the context? Do NOT re-derive analysis or second-guess the assistant's "
+        "conclusions (e.g. which study is 'worst/best' by % of target) — if the cited numbers "
+        "match the context, the ranking is the assistant's analysis, not a grounding error. "
         "Generic framing/Key-Insight prose is fine. Reply ONLY with JSON: "
         '{"grounded": true|false, "reason": "<=1 sentence"}.'
     )
@@ -144,7 +167,15 @@ async def main():
         )
         print(f"Created dataset '{DATASET_NAME}' with {len(QUERIES)} examples.")
     else:
-        print(f"Using existing dataset '{DATASET_NAME}'.")
+        # Keep the dataset in sync with QUERIES — add any examples not already present
+        # (so new test cases like the CTMS queries get evaluated without a manual reset).
+        existing = {(ex.inputs or {}).get("query") for ex in client.list_examples(dataset_name=DATASET_NAME)}
+        new = [{"inputs": {"query": q, "type": t}} for q, t in QUERIES if q not in existing]
+        if new:
+            client.create_examples(dataset_name=DATASET_NAME, examples=new)
+            print(f"Added {len(new)} new example(s) to '{DATASET_NAME}' (now {len(existing) + len(new)}).")
+        else:
+            print(f"Using existing dataset '{DATASET_NAME}' ({len(existing)} examples).")
 
     agent = await build_agent()
     results = await aevaluate(

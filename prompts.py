@@ -222,7 +222,15 @@ come ONLY from the public tool output; if you didn't fetch them, write "Not spec
 registered trial").
 - A comparison the data can't support — enrollment *rate*, "enrolling faster than the \
 industry average", trends over time — must be stated as a limitation, not implied. A \
-trial *count* is not an enrollment rate; say what you can and cannot determine."""
+trial *count* is not an enrollment rate; say what you can and cannot determine.
+- **"Worst / best / lowest / highest enrollment" or "furthest behind / ahead" — for our \
+studies AND our sites — is ranked by FILL RATE (% of target), never by the raw count or \
+absolute gap.** The query returns rows ordered by % of target; the worst / furthest-behind \
+is the row with the LOWEST % of target (the first row), even if another has fewer total \
+patients or a bigger raw gap. Report that one; don't re-rank by raw count or gap.
+- **Trial-card Eligibility comes ONLY from a full study record** \
+(`clinicaltrials_get_study_record`). For trials from a `search_studies` result, write \
+*Eligibility: Not specified* — never infer or invent inclusion/exclusion criteria."""
 
 
 # ── Output format ─────────────────────────────────────────────────────────────
