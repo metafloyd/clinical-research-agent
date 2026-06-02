@@ -245,11 +245,16 @@ async def handle_query(query: str):
                 except Exception as step_exc:
                     _log.warning("Step persistence failed (non-fatal): %r", step_exc)
             elif kind == "on_tool_end":
-                raw = str(event["data"].get("output", ""))
-                for nct in re.findall(r'NCT\d{8}', raw):
-                    sources.add(("ct", nct))
-                for pmid in re.findall(r'(?i)(?:"pmid"|pmid)["\s:]+(\d{6,8})', raw):
-                    sources.add(("pm", pmid))
+                # Don't scrape the INTERNAL tool's output for citations: its rows carry
+                # our studies' nct_id values (registry references), not a ClinicalTrials.gov
+                # search — labeling them "Sources: ClinicalTrials.gov" on a pure-internal
+                # query misleads the user. Only public tools contribute sources.
+                if event["name"] != "query_trial_operations":
+                    raw = str(event["data"].get("output", ""))
+                    for nct in re.findall(r'NCT\d{8}', raw):
+                        sources.add(("ct", nct))
+                    for pmid in re.findall(r'(?i)(?:"pmid"|pmid)["\s:]+(\d{6,8})', raw):
+                        sources.add(("pm", pmid))
             elif kind == "on_chat_model_stream":
                 # Only stream the MAIN agent's synthesis tokens (langgraph_node ==
                 # "agent"). The NL→SQL generator inside query_trial_operations is a
