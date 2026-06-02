@@ -232,8 +232,14 @@ async def handle_query(query: str):
                 for pmid in re.findall(r'(?i)(?:"pmid"|pmid)["\s:]+(\d{6,8})', raw):
                     sources.add(("pm", pmid))
             elif kind == "on_chat_model_stream":
+                # Only stream the MAIN agent's synthesis tokens (langgraph_node ==
+                # "agent"). The NL→SQL generator inside query_trial_operations is a
+                # NESTED model call running in the "tools" node — without this guard
+                # its raw SQL streams straight into the answer (the "ugly SQL" bug).
+                node = event.get("metadata", {}).get("langgraph_node")
                 chunk = event["data"].get("chunk")
-                if (chunk and isinstance(chunk.content, str) and chunk.content
+                if (node == "agent" and chunk and isinstance(chunk.content, str)
+                        and chunk.content
                         and not getattr(chunk, "tool_call_chunks", [])):
                     await msg.stream_token(chunk.content)
                     streamed = True
