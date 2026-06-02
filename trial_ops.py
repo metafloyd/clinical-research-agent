@@ -71,11 +71,16 @@ SCHEMA_DESCRIPTION = """\
 Tables (SQLite):
 - studies(internal_id, nct_id, title, therapeutic_area, phase, status,
           principal_investigator, target_enrollment, start_date, sponsor_type)
-    therapeutic_area ∈ {Cardiometabolic, Oncology, Neurology}
+    therapeutic_area ∈ {Cardiometabolic, Cardiology, Oncology, Neurology,
+                        Hematology, Infectious Disease}
     phase ∈ {Phase 1, Phase 2, Phase 3}
     status ∈ {Recruiting, Active, not recruiting, Completed}
     sponsor_type ∈ {Industry, Investigator-initiated, Federal}
-    nct_id links a study to the public ClinicalTrials.gov registry.
+    target_enrollment is the institution-wide target (sum of this study's site targets).
+    nct_id links a study to the public ClinicalTrials.gov registry; it is NULL for
+    unregistered studies (e.g. some investigator-initiated ones) — exclude NULLs when
+    the question is about NCT/registered trials.
+    start_date is 'YYYY-MM-DD'; for "started in <year>" use start_date LIKE '<year>-%'.
 - sites(site_id, site_name, city, state, region)
     state is a 2-LETTER code (not the full name). The four sites are:
       ('SITE-RST','Mayo Clinic Rochester','Rochester','MN','Midwest')
@@ -97,16 +102,32 @@ Join studies↔enrollment on internal_id, enrollment↔sites on site_id."""
 STUDIES = [
     ("MAYO-2021-014", "NCT03574597", "Semaglutide for Cardiovascular Outcomes in Overweight/Obesity",
      "Cardiometabolic", "Phase 3", "Active, not recruiting", "Dr. Helen Park", 180, "2021-06-15", "Industry"),
+    ("MAYO-2021-033", "NCT01994889", "Tafamidis in Transthyretin Amyloid Cardiomyopathy (ATTR-ACT)",
+     "Cardiology", "Phase 3", "Completed", "Dr. Mark Reyes", 55, "2021-04-22", "Industry"),
+    ("MAYO-2022-009", "NCT03036124", "Dapagliflozin in Heart Failure with Reduced EF (DAPA-HF)",
+     "Cardiology", "Phase 3", "Completed", "Dr. Mark Reyes", 110, "2022-02-18", "Industry"),
     ("MAYO-2022-031", "NCT03548935", "Semaglutide 2.4 mg for Weight Management",
      "Cardiometabolic", "Phase 3", "Completed", "Dr. Helen Park", 120, "2022-01-10", "Industry"),
     ("MAYO-2023-007", "NCT02578680", "Pembrolizumab plus Chemotherapy in Metastatic NSCLC",
      "Oncology", "Phase 3", "Active, not recruiting", "Dr. Raj Patel", 90, "2023-03-01", "Industry"),
     ("MAYO-2023-022", "NCT04437511", "Donanemab in Early Symptomatic Alzheimer's Disease",
      "Neurology", "Phase 3", "Recruiting", "Dr. Susan Cole", 75, "2023-09-12", "Industry"),
+    ("MAYO-2023-041", "NCT03887455", "Lecanemab in Early Alzheimer's Disease (Clarity AD)",
+     "Neurology", "Phase 3", "Active, not recruiting", "Dr. Susan Cole", 85, "2023-11-03", "Industry"),
+    ("MAYO-2023-055", "NCT03954834", "Tirzepatide for Glycemic Control in Type 2 Diabetes (SURPASS)",
+     "Cardiometabolic", "Phase 3", "Active, not recruiting", "Dr. Helen Park", 95, "2023-06-27", "Industry"),
     ("MAYO-2024-003", "NCT01866319", "Pembrolizumab versus Ipilimumab in Advanced Melanoma",
      "Oncology", "Phase 3", "Completed", "Dr. Raj Patel", 60, "2024-02-05", "Industry"),
+    ("MAYO-2024-012", "NCT03434379", "Atezolizumab plus Bevacizumab in Hepatocellular Carcinoma (IMbrave150)",
+     "Oncology", "Phase 3", "Active, not recruiting", "Dr. Raj Patel", 70, "2024-03-19", "Industry"),
     ("MAYO-2024-018", "NCT04368728", "mRNA Vaccine Immunogenicity Substudy",
-     "Cardiometabolic", "Phase 2", "Recruiting", "Dr. Helen Park", 50, "2024-07-20", "Federal"),
+     "Infectious Disease", "Phase 2", "Recruiting", "Dr. Liam Foster", 50, "2024-07-20", "Federal"),
+    ("MAYO-2024-027", "NCT02348216", "Axicabtagene Ciloleucel in Refractory Large B-Cell Lymphoma",
+     "Hematology", "Phase 2", "Recruiting", "Dr. Anita Rao", 40, "2024-05-14", "Industry"),
+    ("MAYO-2024-039", "NCT04381936", "Dexamethasone in Hospitalized COVID-19 (RECOVERY substudy)",
+     "Infectious Disease", "Phase 3", "Completed", "Dr. Liam Foster", 65, "2024-01-30", "Investigator-initiated"),
+    ("MAYO-2025-002", None, "Investigator-Initiated CAR-NK Cell Therapy in Refractory Solid Tumors",
+     "Hematology", "Phase 1", "Recruiting", "Dr. Anita Rao", 24, "2025-01-15", "Investigator-initiated"),
 ]
 
 # (site_id, site_name, city, state, region)
@@ -141,6 +162,33 @@ ENROLLMENT = [
     # MAYO-2024-018 (target 50) — newest, recruiting
     (14, "MAYO-2024-018", "SITE-RST", _AS_OF, 27,  12, 25, "Behind"),
     (15, "MAYO-2024-018", "SITE-MHS", _AS_OF, 19,  11, 25, "Behind"),
+    # MAYO-2021-033 (target 55) — ATTR cardiomyopathy, completed
+    (16, "MAYO-2021-033", "SITE-RST", _AS_OF, 60,  35, 35, "Complete"),
+    (17, "MAYO-2021-033", "SITE-JAX", _AS_OF, 35,  20, 20, "Complete"),
+    # MAYO-2022-009 (target 110) — DAPA-HF, completed
+    (18, "MAYO-2022-009", "SITE-RST", _AS_OF, 92,  60, 60, "Complete"),
+    (19, "MAYO-2022-009", "SITE-JAX", _AS_OF, 78,  50, 50, "Complete"),
+    # MAYO-2023-041 (target 85) — lecanemab, active
+    (20, "MAYO-2023-041", "SITE-RST", _AS_OF, 70,  40, 40, "On track"),
+    (21, "MAYO-2023-041", "SITE-JAX", _AS_OF, 45,  26, 25, "Ahead"),
+    (22, "MAYO-2023-041", "SITE-PHX", _AS_OF, 32,  16, 20, "Behind"),
+    # MAYO-2023-055 (target 95) — tirzepatide, active
+    (23, "MAYO-2023-055", "SITE-RST", _AS_OF, 80,  50, 50, "On track"),
+    (24, "MAYO-2023-055", "SITE-JAX", _AS_OF, 55,  33, 30, "Ahead"),
+    (25, "MAYO-2023-055", "SITE-MHS", _AS_OF, 25,  13, 15, "Behind"),
+    # MAYO-2024-012 (target 70) — atezolizumab HCC, active
+    (26, "MAYO-2024-012", "SITE-RST", _AS_OF, 55,  35, 35, "On track"),
+    (27, "MAYO-2024-012", "SITE-JAX", _AS_OF, 40,  24, 25, "Behind"),
+    (28, "MAYO-2024-012", "SITE-PHX", _AS_OF, 18,   9, 10, "Behind"),
+    # MAYO-2024-027 (target 40) — CAR-T lymphoma, recruiting
+    (29, "MAYO-2024-027", "SITE-RST", _AS_OF, 38,  18, 25, "Behind"),
+    (30, "MAYO-2024-027", "SITE-PHX", _AS_OF, 22,  11, 15, "Behind"),
+    # MAYO-2024-039 (target 65) — dexamethasone COVID, completed
+    (31, "MAYO-2024-039", "SITE-RST", _AS_OF, 70,  40, 40, "Complete"),
+    (32, "MAYO-2024-039", "SITE-MHS", _AS_OF, 30,  25, 25, "Complete"),
+    # MAYO-2025-002 (target 24) — investigator-initiated CAR-NK, recruiting, no NCT yet
+    (33, "MAYO-2025-002", "SITE-RST", _AS_OF, 20,   8, 14, "Behind"),
+    (34, "MAYO-2025-002", "SITE-PHX", _AS_OF, 12,   5, 10, "Behind"),
 ]
 
 
@@ -182,10 +230,28 @@ SQL: SELECT internal_id, nct_id, title, status, principal_investigator
      FROM studies WHERE phase = 'Phase 3' AND therapeutic_area = 'Oncology'
      AND status != 'Completed';
 
-Q: What is the NCT ID and our enrollment for the donanemab trial?
-SQL: SELECT s.nct_id, s.title, SUM(e.enrolled) AS enrolled, s.target_enrollment
+Q: What is our enrollment on the donanemab trial?   -- a SPECIFIC named trial: return the real IDs + the study TOTAL (never a per-site row)
+SQL: SELECT s.internal_id, s.nct_id, s.title, SUM(e.enrolled) AS enrolled, s.target_enrollment
      FROM studies s JOIN enrollment e ON e.internal_id = s.internal_id
      WHERE s.title LIKE '%Donanemab%' GROUP BY s.internal_id;
+
+Q: Which of our studies has the worst enrollment?   -- "worst/best/lagging enrollment" = fill rate, NOT absolute count
+SQL: SELECT s.internal_id, s.title, SUM(e.enrolled) AS enrolled, s.target_enrollment,
+     ROUND(SUM(e.enrolled) * 100.0 / s.target_enrollment, 1) AS pct_of_target
+     FROM studies s JOIN enrollment e ON e.internal_id = s.internal_id
+     GROUP BY s.internal_id ORDER BY pct_of_target ASC;
+
+Q: Which PIs have trials that are behind target?   -- count TRIALS, not site rows
+SQL: SELECT s.principal_investigator, COUNT(DISTINCT s.internal_id) AS trials_behind
+     FROM studies s JOIN enrollment e ON e.internal_id = s.internal_id
+     WHERE e.status = 'Behind' GROUP BY s.principal_investigator
+     ORDER BY trials_behind DESC;
+
+Q: How are we doing?   -- vague status question → portfolio enrollment-vs-target summary
+SQL: SELECT s.internal_id, s.title, SUM(e.enrolled) AS enrolled, s.target_enrollment,
+     ROUND(SUM(e.enrolled) * 100.0 / s.target_enrollment, 1) AS pct_of_target
+     FROM studies s JOIN enrollment e ON e.internal_id = s.internal_id
+     GROUP BY s.internal_id ORDER BY pct_of_target ASC;
 
 Q: How many patients have we enrolled at the Rochester site?
 SQL: SELECT si.site_name, SUM(e.enrolled) AS enrolled
@@ -210,7 +276,19 @@ Rules:
 - A SINGLE read-only SELECT (or WITH … SELECT). Never INSERT/UPDATE/DELETE/DDL.
 - Always cap rows with LIMIT 50 unless the query already aggregates to few rows.
 - Use the nct_id column when the question references a ClinicalTrials.gov / NCT number.
-- If the question cannot be answered from these tables, return exactly: SELECT 'NO_MATCH';"""
+- For a SPECIFIC named trial, SELECT internal_id, nct_id, title AND the totals — so the
+  real IDs are in the result and never have to be guessed — and return the study TOTAL
+  (GROUP BY internal_id), not an individual site row.
+- "worst / best / lagging / leading / how is X tracking" about enrollment = rank by FILL
+  RATE (SUM(enrolled)*1.0/target), not absolute count (a small-target study naturally has
+  fewer patients).
+- Counting trials/studies from the enrollment table uses COUNT(DISTINCT internal_id) —
+  enrollment has one row PER SITE, so COUNT(*) over-counts.
+- A vague status question about our work ("how are we doing?", "where do we stand?",
+  "give me a status update") = the portfolio enrollment-vs-target summary (per study,
+  with % of target).
+- If the question is truly unrelated to our studies/sites/enrollment, return exactly:
+  SELECT 'NO_MATCH';"""
 
 _FENCE = re.compile(r"^```(?:sql)?\s*|\s*```$", re.IGNORECASE | re.MULTILINE)
 _FORBIDDEN = re.compile(
