@@ -74,7 +74,11 @@ Tables (SQLite):
     therapeutic_area ∈ {Cardiometabolic, Cardiology, Oncology, Neurology,
                         Hematology, Infectious Disease}
     phase ∈ {Phase 1, Phase 2, Phase 3}
-    status ∈ {Recruiting, Active, not recruiting, Completed}
+    status is EXACTLY one of these three string literals: 'Recruiting',
+      'Active, not recruiting', 'Completed'. (The middle one is the full literal
+      'Active, not recruiting' — there is NO value just 'Active'.)
+      "active" / "ongoing" studies = status != 'Completed' (Recruiting + Active, not
+      recruiting); "recruiting" = status = 'Recruiting'.
     sponsor_type ∈ {Industry, Investigator-initiated, Federal}
     target_enrollment is the institution-wide target (sum of this study's site targets).
     nct_id links a study to the public ClinicalTrials.gov registry; it is NULL for
@@ -247,6 +251,9 @@ SQL: SELECT s.principal_investigator, COUNT(DISTINCT s.internal_id) AS trials_be
      WHERE e.status = 'Behind' GROUP BY s.principal_investigator
      ORDER BY trials_behind DESC;
 
+Q: How many active studies do we have?   -- "active/ongoing" = NOT Completed; never status='Active'
+SQL: SELECT COUNT(*) AS active_studies FROM studies WHERE status != 'Completed';
+
 Q: How are we doing?   -- vague status question → portfolio enrollment-vs-target summary
 SQL: SELECT s.internal_id, s.title, SUM(e.enrolled) AS enrolled, s.target_enrollment,
      ROUND(SUM(e.enrolled) * 100.0 / s.target_enrollment, 1) AS pct_of_target
@@ -396,9 +403,12 @@ async def _answer(model, question: str, db_path: str) -> str:
     table = _format_rows(cols, rows)
     return (
         "Internal trial operations (Mayo CTMS) — OUR private operational data. "
-        "Render as a plain enrolled/target list under '## Our Enrollment'; do NOT format "
-        "as a ClinicalTrials.gov trial card and do NOT add sponsor, status, phase, or "
-        "eligibility (those fields are NOT in this result — inventing them is fabrication).\n"
+        "Use ONLY the rows below, exactly as given. If the result is a single count/number, "
+        "state just that number in one sentence — do NOT render an enrollment list. "
+        "NEVER invent a study, a name (e.g. 'Study 1'), an enrollment number, sponsor, "
+        "status, phase, or eligibility that is not in the rows below — that is fabrication. "
+        "If a per-study list IS present, render it under '## Our Enrollment' (not as a "
+        "ClinicalTrials.gov card).\n"
         f"{table}"
     )
 
