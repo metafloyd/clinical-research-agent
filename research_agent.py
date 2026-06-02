@@ -75,7 +75,7 @@ async def build_agent():
         "pubmed":          {"url": PUBMED_MCP_URL,         "transport": "streamable_http"},
     })
     mcp_tools = await client.get_tools()
-    sql_tool = make_trial_ops_tool(model)
+    sql_tool = make_trial_ops_tool()
     tools = make_tools_resilient([*mcp_tools, sql_tool])
     return create_react_agent(model, tools, prompt=SYSTEM_PROMPT)
 

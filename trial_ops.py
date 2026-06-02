@@ -20,13 +20,17 @@ the cross-tool demo returns real public data when the agent looks them up.
 """
 
 import logging
+import os
 import re
 import sqlite3
 
+from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import StructuredTool
 
-from config import TRIAL_OPS_DB_PATH
+from config import TRIAL_OPS_DB_PATH, NLSQL_MAX_TOKENS
+
+load_dotenv()  # ensure OPENAI_API_KEY is available even if imported standalone
 
 _log = logging.getLogger(__name__)
 
@@ -199,7 +203,6 @@ ENROLLMENT = [
 def ensure_db(db_path: str = TRIAL_OPS_DB_PATH) -> str:
     """Create and seed the SQLite DB if it does not already exist (idempotent,
     deterministic). Safe to call on every agent build / process boot."""
-    import os
     if os.path.exists(db_path):
         return db_path
     con = sqlite3.connect(db_path)
@@ -331,12 +334,28 @@ def _strip_sql(text: str) -> str:
     return s.strip()
 
 
-async def _generate_sql(model, question: str, error: str = None, prior_sql: str = None) -> str:
+# Dedicated, more capable model for NL→SQL generation. gpt-4o-mini was too weak at
+# text-to-SQL (simple phrasings kept missing → false NO_MATCH / wrong column); gpt-4o
+# handles them without per-phrase few-shots. One short call per internal query, so the
+# cost/latency is negligible. Lazy-init so it's built after .env is loaded.
+_sql_model = None
+
+
+def _get_sql_model():
+    global _sql_model
+    if _sql_model is None:
+        from langchain_openai import ChatOpenAI
+        _sql_model = ChatOpenAI(model="gpt-4o", api_key=os.getenv("OPENAI_API_KEY"),
+                                temperature=0, max_tokens=NLSQL_MAX_TOKENS)
+    return _sql_model
+
+
+async def _generate_sql(question: str, error: str = None, prior_sql: str = None) -> str:
     user = question
     if error:
         user = (f"Question: {question}\nYour previous SQL was:\n{prior_sql}\n"
                 f"It failed with: {error}\nReturn a corrected single SQLite SELECT.")
-    resp = await model.ainvoke(
+    resp = await _get_sql_model().ainvoke(
         [SystemMessage(content=_SQLGEN_SYSTEM), HumanMessage(content=user)]
     )
     return _strip_sql(resp.content if isinstance(resp.content, str) else str(resp.content))
@@ -376,15 +395,15 @@ def _format_rows(cols, rows) -> str:
     return f"{header}\n{body}"
 
 
-async def _answer(model, question: str, db_path: str) -> str:
+async def _answer(question: str, db_path: str) -> str:
     ensure_db(db_path)
-    sql = await _generate_sql(model, question)
+    sql = await _generate_sql(question)
     try:
         clean = _assert_read_only(sql)
         cols, rows = _run_readonly(clean, db_path)
     except Exception as e1:
         _log.info("NL→SQL first attempt failed (%s); self-correcting once", e1)
-        sql = await _generate_sql(model, question, error=str(e1), prior_sql=sql)
+        sql = await _generate_sql(question, error=str(e1), prior_sql=sql)
         try:
             clean = _assert_read_only(sql)
             cols, rows = _run_readonly(clean, db_path)
@@ -422,11 +441,11 @@ _TOOL_DESCRIPTION = (
 )
 
 
-def make_trial_ops_tool(model, db_path: str = TRIAL_OPS_DB_PATH) -> StructuredTool:
-    """Build the `query_trial_operations` tool, closing over the model + db path."""
+def make_trial_ops_tool(db_path: str = TRIAL_OPS_DB_PATH) -> StructuredTool:
+    """Build the `query_trial_operations` tool (NL→SQL uses its own gpt-4o model)."""
 
     async def query_trial_operations(question: str) -> str:
-        return await _answer(model, question, db_path)
+        return await _answer(question, db_path)
 
     return StructuredTool.from_function(
         coroutine=query_trial_operations,
