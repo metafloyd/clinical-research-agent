@@ -257,6 +257,16 @@ Q: What is Dr. Raj Patel researching / working on?   -- a PI's research/work = t
 SQL: SELECT internal_id, nct_id, title, therapeutic_area, phase, status
      FROM studies WHERE principal_investigator LIKE '%Raj Patel%';
 
+Q: Who is leading / running the donanemab trial?   -- study → its PI (inverse lookup); also for phase/status/dates of a named trial
+SQL: SELECT title, principal_investigator, phase, status FROM studies
+     WHERE title LIKE '%Donanemab%';
+
+Q: What is happening at our Florida site?   -- a place → its site; list that site's trials + enrollment
+SQL: SELECT s.title, e.enrolled, e.target, e.status
+     FROM enrollment e JOIN studies s ON s.internal_id = e.internal_id
+     JOIN sites si ON si.site_id = e.site_id
+     WHERE si.state = 'FL' OR si.city = 'Jacksonville' OR si.site_name LIKE '%Florida%';
+
 Q: How many patients have we enrolled at the Rochester site?
 SQL: SELECT si.site_name, SUM(e.enrolled) AS enrolled
      FROM enrollment e JOIN sites si ON si.site_id = e.site_id
