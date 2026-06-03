@@ -65,11 +65,6 @@ a { color: #1F497D !important; }
 /* ── Hide logo image on splash, greeting takes its place ───────────────── */
 #welcome-screen img { display: none !important; }
 
-/* ── No landing-screen flash when reloading an existing thread ──────────── */
-/* custom.js adds .cl-thread-view to <html> on /thread/ URLs; hide the welcome
-   screen there so the brief pre-resume render of greeting+starters never shows. */
-html.cl-thread-view #welcome-screen { display: none !important; }
-
 /* ── Welcome screen: anchor content to the TOP, not vertically centered ──── */
 /* Chainlit centers #welcome-screen vertically, so its position drifted with the
    sidebar state (narrower area → starters wrap to more lines → taller block →
