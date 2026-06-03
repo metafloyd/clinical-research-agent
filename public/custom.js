@@ -1,4 +1,15 @@
 (function () {
+    // Avoid the landing-screen FLASH when reloading an existing thread: Chainlit
+    // renders #welcome-screen (greeting + starters) first, then on_chat_resume swaps
+    // in the history ~0.3s later. If the URL is a /thread/ view we're resuming a chat,
+    // so mark <html> immediately and let CSS hide the welcome screen until the chat
+    // renders. Runs first (before any DOM work) to minimise the visible flash.
+    function syncThreadView() {
+        var isThread = /\/thread\//.test(location.pathname);
+        document.documentElement.classList.toggle('cl-thread-view', isThread);
+    }
+    syncThreadView();
+
     // Single shared AudioContext — browsers cap total contexts at ~6, so
     // creating a new one per sound silently fails after a few messages.
     var _audioCtx = null;
@@ -210,6 +221,7 @@
 
     var _wasStreaming = false;
     new MutationObserver(function () {
+        syncThreadView();   // keep in sync across new-chat / thread navigation
         injectGreeting();
         injectDataSourceBadge();
         applyUserName();
