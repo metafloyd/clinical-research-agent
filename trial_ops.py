@@ -677,8 +677,11 @@ async def _plot_answer(question: str, db_path: str):
     summary = (
         f"A {spec.get('chart_type', 'bar')} chart titled \"{spec.get('title', '')}\" has "
         "been rendered for the user from OUR internal trial-operations data. Add ONE short "
-        "sentence of insight grounded in the data below — do NOT re-list the rows or invent "
-        f"any value not present here.\nChart data:\n{table}"
+        "sentence of insight using ONLY the exact category labels and numbers in the data "
+        "below. Do NOT rename a category (e.g. never write 'Cardiovascular' for 'Cardiology'); "
+        "do NOT add a qualifier the data doesn't state (e.g. don't call a plain count 'active' "
+        "unless a column says so); do NOT re-list every row; do NOT invent any value. If two "
+        f"categories tie, say they tie.\nChart data:\n{table}"
     )
     return (summary, fig.to_json())
 
