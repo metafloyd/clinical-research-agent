@@ -411,6 +411,12 @@ Rules:
 - For a SPECIFIC named trial, SELECT internal_id, nct_id, title AND the totals — so the
   real IDs are in the result and never have to be guessed — and return the study TOTAL
   (GROUP BY internal_id), not an individual site row.
+- Match a study by a drug/condition phrase using its SIGNIFICANT TERMS SEPARATELY:
+  `title LIKE '%term1%' AND title LIKE '%term2%'`, NEVER the literal multi-word phrase.
+  Our titles are descriptive ("Semaglutide for Cardiovascular Outcomes in Overweight/
+  Obesity"), so "semaglutide cardiovascular trial" → title LIKE '%Semaglutide%' AND title
+  LIKE '%Cardiovascular%' (a literal LIKE '%semaglutide cardiovascular%' wrongly returns
+  nothing).
 - "worst / best / lagging / leading / how is X tracking" about enrollment = rank by FILL
   RATE (SUM(enrolled)*1.0/target), not absolute count (a small-target study naturally has
   fewer patients).
@@ -602,6 +608,14 @@ region" → "donut", x = the category column, y = "n" where SQL selects COUNT(*)
 "randomized","completed"] summed from enrollment_current.
 - CURRENT values → enrollment_current; trends → raw enrollment. Always select friendly \
 label columns (site_name, title) for axes, not internal_id/site_id.
+- Match a study by a drug/condition phrase using its SIGNIFICANT TERMS SEPARATELY — \
+`title LIKE '%term1%' AND title LIKE '%term2%'` — never the literal multi-word phrase \
+(our titles are descriptive, so "semaglutide cardiovascular" → \
+`title LIKE '%Semaglutide%' AND title LIKE '%Cardiovascular%'`).
+- **If the question asks to chart data NOT in the schema — budget, cost, $, demographics, \
+age/sex/race, p-values, outcomes/results, safety/adverse events — reply with EXACTLY \
+{{"chart_type": "none"}} and nothing else. NEVER substitute a different column (never chart \
+enrollment or targets AS "budget").**
 Reply with ONLY the JSON object."""
 
 
@@ -666,6 +680,11 @@ def _build_figure(spec: dict, cols, rows):
 async def _plot_answer(question: str, db_path: str):
     ensure_db(db_path)
     spec = await _generate_chart_spec(question)
+    if (spec.get("chart_type") or "").lower() == "none" or not spec.get("sql"):
+        return ("That isn't something our internal trial-operations data tracks (it covers "
+                "enrollment, sites, study status, phase, therapeutic area — not budget, "
+                "demographics, or outcomes). I can chart enrollment by study or site, trends "
+                "over time, recruitment funnels, or portfolio breakdowns.", None)
     clean = _assert_read_only(spec.get("sql", ""))
     cols, rows = _run_readonly(clean, db_path)
     if not rows:
@@ -681,7 +700,9 @@ async def _plot_answer(question: str, db_path: str):
         "below. Do NOT rename a category (e.g. never write 'Cardiovascular' for 'Cardiology'); "
         "do NOT add a qualifier the data doesn't state (e.g. don't call a plain count 'active' "
         "unless a column says so); do NOT re-list every row; do NOT invent any value. If two "
-        f"categories tie, say they tie.\nChart data:\n{table}"
+        "categories tie, say they tie. Do NOT write any markdown image or link (no "
+        "![...](...) and no attachment://) — the chart is already displayed above your text."
+        f"\nChart data:\n{table}"
     )
     return (summary, fig.to_json())
 

@@ -30,3 +30,7 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Stress-test run artifacts
+stress_results.txt
+stress_run.log

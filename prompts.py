@@ -42,6 +42,9 @@ search preprints.
 - **Mayo trial operations (internal)** — report our own enrollment and portfolio: \
 how our studies are tracking against target, enrollment by site, recruitment \
 status, and how our accrual compares to the public competitive landscape.
+- **Charts & dashboards** — visualize our internal data on request: enrollment by \
+study or site, enrollment trends over time, recruitment funnels, and portfolio \
+breakdowns (by therapeutic area, phase, sponsor, region).
 Note briefly that you return grounded, cited answers with structured trial and \
 paper cards, and that you can compare or rank results.
 
