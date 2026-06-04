@@ -113,6 +113,7 @@ call both source tools **in parallel in a single step**.
 | Preprints or broad literature | `pubmed_europepmc_search` |
 | **Our** internal enrollment / portfolio / site recruitment / accrual vs. target | `query_trial_operations` |
 | **Our** trial(s) compared to the public landscape | `query_trial_operations` + `clinicaltrials_search_studies` |
+| **Chart / visualize / graph / plot / trend / breakdown** of OUR data | `plot_trial_operations` |
 
 `query_trial_operations` answers from Mayo's **private** operational database — *our* \
 studies, *our* sites, *our* per-site enrollment vs. target. Route here for anything \
@@ -123,6 +124,14 @@ question through in plain English — the tool generates the SQL itself. For "ho
 *we* doing versus the field / competitive landscape", call BOTH \
 `query_trial_operations` (our accrual) AND `clinicaltrials_search_studies` (the \
 public landscape) and keep the two clearly separated.
+
+**`plot_trial_operations` renders a CHART of our internal data.** Route here when the user \
+asks to **chart / visualize / graph / plot** our data, or wants a **trend / over time / \
+breakdown / distribution** ("chart our enrollment by site", "show the donanemab enrollment \
+trend", "visualize our portfolio by therapeutic area", "funnel for the NSCLC trial"). The \
+chart is shown to the user automatically; your job is a ONE-sentence insight from the data \
+the tool returns — do NOT re-list the numbers as text and do NOT invent values. For a plain \
+non-visual question, use `query_trial_operations` (text) instead.
 
 **Bare counts with NO condition/drug named are about OUR portfolio.** "How many studies \
 are recruiting / active / completed", "how many trials do we run", "how many Phase 3 \

@@ -564,3 +564,148 @@ def make_trial_ops_tool(db_path: str = TRIAL_OPS_DB_PATH) -> StructuredTool:
         name="query_trial_operations",
         description=_TOOL_DESCRIPTION,
     )
+
+
+# ── Visualization: NL → chart spec → Plotly figure ─────────────────────────────
+# The agent calls plot_trial_operations for "chart/visualize/trend/breakdown" asks.
+# It returns (text_summary, figure_json) via content_and_artifact: the model sees the
+# summary (to write a 1-line insight), app.py renders the figure JSON as a cl.Plotly.
+
+_BRAND = "#0E3293"
+_PALETTE = ["#0E3293", "#3B82F6", "#60A5FA", "#93C5FD", "#10B981",
+            "#F59E0B", "#EF4444", "#8B5CF6", "#14B8A6", "#6B7280"]
+
+import json as _json
+
+_CHART_SYSTEM = f"""You turn a question about Mayo Clinic's INTERNAL trial-operations \
+database into ONE chart. Reply with ONLY a JSON object (no prose, no fences) with keys:
+  "sql": a single read-only SQLite SELECT that returns the chart data,
+  "chart_type": one of "bar" | "line" | "donut" | "funnel",
+  "x": the result column for the category/time axis (the labels column for donut),
+  "y": the value column(s) — a string OR a list of strings (e.g. ["enrolled","target"] \
+for grouped bars; the ordered stage columns for a funnel),
+  "color": (optional) a result column to split series by (e.g. the study name for a \
+multi-line trend), else null,
+  "title": a short, human chart title.
+
+{SCHEMA_DESCRIPTION}
+
+Chart guidance:
+- "enrollment by study / by site", "enrolled vs target" → "bar", x = the NAME column \
+(site_name or study title — friendly labels, never raw IDs), y = ["enrolled","target"].
+- "trend / over time / month by month / velocity" → "line", x = as_of_date (use the raw \
+`enrollment` time series, GROUP BY as_of_date), y = "enrolled", color = the study title \
+if comparing multiple studies.
+- "breakdown / distribution / mix / by therapeutic area / by phase / by sponsor / by \
+region" → "donut", x = the category column, y = "n" where SQL selects COUNT(*) AS n.
+- "funnel / screening / screen-to-enroll" → "funnel", y = ["screened","enrolled",\
+"randomized","completed"] summed from enrollment_current.
+- CURRENT values → enrollment_current; trends → raw enrollment. Always select friendly \
+label columns (site_name, title) for axes, not internal_id/site_id.
+Reply with ONLY the JSON object."""
+
+
+async def _generate_chart_spec(question: str) -> dict:
+    resp = await _get_sql_model().ainvoke(
+        [SystemMessage(content=_CHART_SYSTEM), HumanMessage(content=question)]
+    )
+    txt = resp.content if isinstance(resp.content, str) else str(resp.content)
+    m = re.search(r"\{.*\}", txt, re.DOTALL)
+    if not m:
+        raise ValueError("chart spec model did not return JSON")
+    return _json.loads(m.group(0))
+
+
+def _build_figure(spec: dict, cols, rows):
+    import plotly.graph_objects as go
+    cd = {c: [r[i] for r in rows] for i, c in enumerate(cols)}
+    ctype = (spec.get("chart_type") or "bar").lower()
+    x = spec.get("x"); color = spec.get("color"); title = spec.get("title") or ""
+    ys = spec.get("y") or []
+    ys = [ys] if isinstance(ys, str) else list(ys)
+    ys = [y for y in ys if y in cd] or [c for c in cols if c != x][:1]
+    fig = go.Figure()
+
+    if ctype in ("donut", "pie"):
+        fig.add_trace(go.Pie(labels=cd.get(x, []), values=cd[ys[0]], hole=0.5,
+                             marker=dict(colors=_PALETTE)))
+    elif ctype == "funnel":
+        stages = ys
+        vals = [sum(v for v in cd[s] if isinstance(v, (int, float))) for s in stages]
+        fig.add_trace(go.Funnel(y=[s.replace("_", " ").title() for s in stages], x=vals,
+                                marker=dict(color=_BRAND)))
+    elif ctype == "line":
+        if color and color in cd and ys:
+            groups = {}
+            for xi, ci, yi in zip(cd[x], cd[color], cd[ys[0]]):
+                groups.setdefault(ci, ([], []))
+                groups[ci][0].append(xi); groups[ci][1].append(yi)
+            for i, (g, (gx, gy)) in enumerate(groups.items()):
+                fig.add_trace(go.Scatter(x=gx, y=gy, mode="lines+markers", name=str(g),
+                                         line=dict(color=_PALETTE[i % len(_PALETTE)])))
+        else:
+            for i, y in enumerate(ys):
+                fig.add_trace(go.Scatter(x=cd.get(x, []), y=cd[y], mode="lines+markers",
+                                         name=y.replace("_", " ").title(),
+                                         line=dict(color=_PALETTE[i % len(_PALETTE)])))
+    else:  # bar / grouped bar (default)
+        for i, y in enumerate(ys):
+            fig.add_trace(go.Bar(x=cd.get(x, []), y=cd[y],
+                                 name=y.replace("_", " ").title(),
+                                 marker_color=_PALETTE[i % len(_PALETTE)]))
+        fig.update_layout(barmode="group")
+
+    fig.update_layout(title=dict(text=title, font=dict(size=16, color=_BRAND)),
+                      template="plotly_white", colorway=_PALETTE,
+                      font=dict(family="Inter, system-ui, sans-serif", size=12),
+                      margin=dict(t=48, l=12, r=12, b=12), height=380,
+                      legend=dict(orientation="h", y=-0.18))
+    return fig
+
+
+async def _plot_answer(question: str, db_path: str):
+    ensure_db(db_path)
+    spec = await _generate_chart_spec(question)
+    clean = _assert_read_only(spec.get("sql", ""))
+    cols, rows = _run_readonly(clean, db_path)
+    if not rows:
+        return ("No internal data matched that chart request — try our enrollment by "
+                "study/site, a trend over time, or a portfolio breakdown.", None)
+    fig = _build_figure(spec, cols, rows)
+    _log.info("plot_trial_operations chart=%s SQL: %s", spec.get("chart_type"), clean)
+    table = _format_rows(cols, rows[:30])
+    summary = (
+        f"A {spec.get('chart_type', 'bar')} chart titled \"{spec.get('title', '')}\" has "
+        "been rendered for the user from OUR internal trial-operations data. Add ONE short "
+        "sentence of insight grounded in the data below — do NOT re-list the rows or invent "
+        f"any value not present here.\nChart data:\n{table}"
+    )
+    return (summary, fig.to_json())
+
+
+_PLOT_TOOL_DESCRIPTION = (
+    "Render a CHART / visualization of Mayo Clinic's INTERNAL trial-operations data — "
+    "enrollment by study or site, enrollment trends over time, recruitment funnels, or "
+    "portfolio breakdowns (by therapeutic area, phase, sponsor, region). Use this whenever "
+    "the user asks to chart / visualize / graph / plot / show a trend, breakdown, or "
+    "distribution of OUR data. Input: a natural-language question."
+)
+
+
+def make_plot_tool(db_path: str = TRIAL_OPS_DB_PATH) -> StructuredTool:
+    """Build the `plot_trial_operations` tool (returns text + a Plotly figure artifact)."""
+
+    async def plot_trial_operations(question: str):
+        try:
+            return await _plot_answer(question, db_path)
+        except Exception as e:
+            _log.warning("plot_trial_operations failed (%r)", e)
+            return ("Couldn't build that chart — try rephrasing, e.g. 'chart our "
+                    "enrollment by site' or 'show the donanemab enrollment trend'.", None)
+
+    return StructuredTool.from_function(
+        coroutine=plot_trial_operations,
+        name="plot_trial_operations",
+        description=_PLOT_TOOL_DESCRIPTION,
+        response_format="content_and_artifact",
+    )

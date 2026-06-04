@@ -71,11 +71,25 @@ _EMPTY_MARK = "No rows matched"
 _RETRY_MARK = "Couldn't answer"
 
 
+async def _answer_with_retry(q, tries=4):
+    # The NL→SQL model is gpt-4o (30k TPM cap); running 38 cases fast can 429.
+    # Back off and retry so rate limits don't masquerade as regressions.
+    for i in range(tries):
+        try:
+            return await t._answer(q, TRIAL_OPS_DB_PATH)
+        except Exception as e:
+            if "rate_limit" in str(e).lower() or "429" in str(e):
+                await asyncio.sleep(8 * (i + 1))
+                continue
+            raise
+    return await t._answer(q, TRIAL_OPS_DB_PATH)
+
+
 async def main() -> int:
     fails = []
     for q, expected in CASES:
         try:
-            out = await t._answer(q, TRIAL_OPS_DB_PATH)
+            out = await _answer_with_retry(q)
             if _DECLINE_MARK in out:
                 got = "decline"
             elif _EMPTY_MARK in out or _RETRY_MARK in out:

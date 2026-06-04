@@ -13,7 +13,7 @@ from config import (
     MODEL_ID, MAIN_MAX_TOKENS,
 )
 from prompts import SYSTEM_PROMPT
-from trial_ops import make_trial_ops_tool, ensure_db
+from trial_ops import make_trial_ops_tool, make_plot_tool, ensure_db
 
 load_dotenv()
 _log = logging.getLogger(__name__)
@@ -75,8 +75,7 @@ async def build_agent():
         "pubmed":          {"url": PUBMED_MCP_URL,         "transport": "streamable_http"},
     })
     mcp_tools = await client.get_tools()
-    sql_tool = make_trial_ops_tool()
-    tools = make_tools_resilient([*mcp_tools, sql_tool])
+    tools = make_tools_resilient([*mcp_tools, make_trial_ops_tool(), make_plot_tool()])
     return create_react_agent(model, tools, prompt=SYSTEM_PROMPT)
 
 # ── CLI runner ────────────────────────────────────────────────────────────────

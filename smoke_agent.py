@@ -46,6 +46,11 @@ CASES = [
                                                   [has("61"), used("query_trial_operations"), used("clinicaltrials")]),
     # out-of-schema → declines, never fabricates studies
     ("what is our trial budget",                  [absent("study 1", "mayo-2023")]),
+    # CHART requests → route to the visualization tool (not the text query tool)
+    ("chart our enrollment by site",              [used("plot_trial_operations")]),
+    ("show the donanemab enrollment trend over time", [used("plot_trial_operations")]),
+    # a plain (non-chart) internal question must NOT route to the chart tool
+    ("how is enrollment tracking across our trials", [used("query_trial_operations"), not_used("plot")]),
 ]
 
 
@@ -63,13 +68,26 @@ def _eval(kind, arg, answer_l, tools):
     return (False, f"unknown check {kind}")
 
 
+async def _invoke_with_retry(agent, q, tries=4):
+    # gpt-4o (SQL/chart gen) has a 30k TPM cap; back off on 429 so rate limits
+    # don't look like regressions.
+    for i in range(tries):
+        try:
+            return await agent.ainvoke({"messages": [HumanMessage(content=q)]},
+                                       config={"recursion_limit": 6})
+        except Exception as e:
+            if i < tries - 1 and ("rate_limit" in str(e).lower() or "429" in str(e)):
+                await asyncio.sleep(8 * (i + 1))
+                continue
+            raise
+
+
 async def main() -> int:
     agent = await build_agent()
     fails = []
     for q, checks in CASES:
         try:
-            r = await agent.ainvoke({"messages": [HumanMessage(content=q)]},
-                                    config={"recursion_limit": 6})
+            r = await _invoke_with_retry(agent, q)
             tools = [tc["name"] for m in r["messages"] if isinstance(m, AIMessage)
                      for tc in (m.tool_calls or [])]
             answer = ""

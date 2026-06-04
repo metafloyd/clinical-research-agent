@@ -214,6 +214,7 @@ async def handle_query(query: str):
 
     msg = cl.Message(content="")
     sources: set[tuple[str, str]] = set()
+    charts: list[str] = []   # Plotly figure JSONs from plot_trial_operations
 
     # Keep last 6 messages (3 turns) — GPT-4o-mini has 128k context, no token pressure.
     ctx_msgs = lc_msgs[-6:]
@@ -233,7 +234,9 @@ async def handle_query(query: str):
             kind = event["event"]
             if kind == "on_tool_start":
                 _tname = event["name"]
-                if _tname == "query_trial_operations":
+                if _tname == "plot_trial_operations":
+                    badge = "📊"                       # internal data chart
+                elif _tname == "query_trial_operations":
                     badge = "🔍"                       # internal DB query
                 elif _is_ct_tool(_tname):
                     badge = "🏥"                       # ClinicalTrials.gov
@@ -245,6 +248,16 @@ async def handle_query(query: str):
                 except Exception as step_exc:
                     _log.warning("Step persistence failed (non-fatal): %r", step_exc)
             elif kind == "on_tool_end":
+                # plot_trial_operations returns a Plotly figure JSON as its artifact —
+                # capture it to render as a chart on the message.
+                if event["name"] == "plot_trial_operations":
+                    out = event["data"].get("output")
+                    fig = getattr(out, "artifact", None)
+                    if fig is None and isinstance(out, tuple) and len(out) == 2:
+                        fig = out[1]
+                    if isinstance(fig, str) and fig.strip():
+                        charts.append(fig)
+                    continue
                 # Don't scrape the INTERNAL tool's output for citations: its rows carry
                 # our studies' nct_id values (registry references), not a ClinicalTrials.gov
                 # search — labeling them "Sources: ClinicalTrials.gov" on a pure-internal
@@ -288,6 +301,17 @@ async def handle_query(query: str):
             lines.append("**📚 PubMed**")
             lines.extend(f"- [PMID {pmid}](https://pubmed.ncbi.nlm.nih.gov/{pmid}/)" for pmid in pm[:5])
         await msg.stream_token("\n\n---\n\n**📎 Sources**\n\n" + "\n".join(lines))
+
+    # Attach any internal-data charts (plot_trial_operations) as inline Plotly elements.
+    if charts:
+        import plotly.io as _pio
+        for i, figjson in enumerate(charts):
+            try:
+                msg.elements.append(
+                    cl.Plotly(name=f"chart-{i}", figure=_pio.from_json(figjson), display="inline")
+                )
+            except Exception as chart_exc:
+                _log.warning("Chart render failed (non-fatal): %r", chart_exc)
 
     await msg.update()
 
