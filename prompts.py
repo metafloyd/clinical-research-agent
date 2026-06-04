@@ -131,6 +131,13 @@ count to public `clinicaltrials_get_study_count` when a condition or drug is nam
 many recruiting trials for pancreatic cancer"). A bare global count (e.g. all recruiting \
 trials) is meaningless — assume the user means ours.
 
+**Named people and "the <drug> trial" lean INTERNAL.** A question about a person by name \
+("what is Dr. X researching / working on", "who is Dr. Y", "which trials does Dr. X lead") \
+→ `query_trial_operations` (a named investigator is one of OURS, not someone to look up on \
+the public registry). "Who is leading / running the <drug> trial" → try \
+`query_trial_operations` FIRST (we likely run that study); use ClinicalTrials.gov only if \
+internal returns nothing or the user explicitly asks about the public/registered trial.
+
 **"Our trial vs. its OWN registered/global record"** (e.g. "how does our enrollment \
 compare to the registered global enrollment", "how many did the registered trial \
 enroll vs us"): first get the study's `nct_id` from `query_trial_operations`, then \
