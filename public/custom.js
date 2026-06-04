@@ -1,4 +1,16 @@
 (function () {
+    // Avoid the landing-screen FLASH when reloading an existing thread. Chainlit
+    // renders #welcome-screen (greeting+starters) whenever there are no messages, and
+    // on a /thread/ reload there are briefly none until on_chat_resume loads them. Mark
+    // <html> on /thread/ URLs so CSS hides the welcome screen; Chainlit's own loading
+    // spinner shows during the ~0.2s resume instead. (A slow/stuck resume is a backend
+    // issue, not this — keep the agent warm.)
+    function syncThreadView() {
+        document.documentElement.classList.toggle(
+            'cl-thread-view', /\/thread\//.test(location.pathname));
+    }
+    syncThreadView();
+
     // Single shared AudioContext — browsers cap total contexts at ~6, so
     // creating a new one per sound silently fails after a few messages.
     var _audioCtx = null;
@@ -210,6 +222,7 @@
 
     var _wasStreaming = false;
     new MutationObserver(function () {
+        syncThreadView();   // keep in sync across new-chat / thread navigation
         injectGreeting();
         injectDataSourceBadge();
         applyUserName();
