@@ -38,166 +38,262 @@ _log = logging.getLogger(__name__)
 
 SCHEMA_DDL = """
 CREATE TABLE studies (
-    internal_id           TEXT PRIMARY KEY,   -- our protocol ID, e.g. 'MAYO-2023-007'
-    nct_id                TEXT,               -- ClinicalTrials.gov ID linking to the public registry
-    title                 TEXT,               -- our internal short title
-    therapeutic_area      TEXT,               -- Cardiometabolic | Oncology | Neurology
-    phase                 TEXT,               -- Phase 1 | Phase 2 | Phase 3
-    status                TEXT,               -- Recruiting | Active, not recruiting | Completed
+    internal_id            TEXT PRIMARY KEY,   -- our protocol ID, e.g. 'MAYO-2023-007'
+    nct_id                 TEXT,               -- ClinicalTrials.gov ID (NULL if unregistered)
+    title                  TEXT,
+    therapeutic_area       TEXT,
+    phase                  TEXT,               -- Phase 1 | Phase 2 | Phase 3
+    status                 TEXT,               -- Recruiting | Active, not recruiting | Completed
     principal_investigator TEXT,
-    target_enrollment     INTEGER,            -- our institution-wide target across all sites
-    start_date            TEXT,               -- YYYY-MM-DD
-    sponsor_type          TEXT                -- Industry | Investigator-initiated | Federal
+    target_enrollment      INTEGER,            -- institution-wide target across sites
+    start_date             TEXT,               -- YYYY-MM-DD (protocol start)
+    enrollment_open_date   TEXT,               -- YYYY-MM-DD (first site activation / FPI window)
+    planned_end_date       TEXT,               -- YYYY-MM-DD (target completion)
+    sponsor_type           TEXT                -- Industry | Investigator-initiated | Federal
 );
 
 CREATE TABLE sites (
-    site_id   TEXT PRIMARY KEY,   -- e.g. 'SITE-RST'
+    site_id   TEXT PRIMARY KEY,
     site_name TEXT,
     city      TEXT,
-    state     TEXT,
-    region    TEXT
+    state     TEXT,                            -- 2-letter US code; '' for international
+    country   TEXT,                            -- USA | UK
+    region    TEXT,                            -- Midwest | Southeast | ... | International
+    site_type TEXT                             -- Academic Medical Center | Health System | Community
 );
 
+-- Monthly CUMULATIVE enrollment time series: one row per study x site x month.
 CREATE TABLE enrollment (
     id          INTEGER PRIMARY KEY,
     internal_id TEXT,    -- FK -> studies.internal_id
     site_id     TEXT,    -- FK -> sites.site_id
-    as_of_date  TEXT,    -- snapshot date, YYYY-MM-DD
-    screened    INTEGER, -- patients screened at this site
-    enrolled    INTEGER, -- patients enrolled at this site
-    target      INTEGER, -- this site's enrollment target for the study
+    as_of_date  TEXT,    -- 'YYYY-MM-01' monthly snapshot
+    screened    INTEGER, -- cumulative screened (>= enrolled)
+    enrolled    INTEGER, -- cumulative enrolled
+    randomized  INTEGER, -- cumulative randomized (<= enrolled)
+    completed   INTEGER, -- cumulative completed (<= randomized)
+    withdrawn   INTEGER, -- cumulative withdrawn
+    target      INTEGER, -- this site's target for the study (constant over time)
     status      TEXT     -- Ahead | On track | Behind | Complete
 );
+
+-- Convenience VIEW: the LATEST snapshot per study x site = the CURRENT state
+-- (one row per study x site, the shape current-enrollment questions expect).
+CREATE VIEW enrollment_current AS
+    SELECT * FROM enrollment
+    WHERE as_of_date = (SELECT MAX(as_of_date) FROM enrollment);
 """
 
 # A compact, plain-text version of the schema for the NL→SQL prompt.
 SCHEMA_DESCRIPTION = """\
 Tables (SQLite):
 - studies(internal_id, nct_id, title, therapeutic_area, phase, status,
-          principal_investigator, target_enrollment, start_date, sponsor_type)
-    therapeutic_area ∈ {Cardiometabolic, Cardiology, Oncology, Neurology,
-                        Hematology, Infectious Disease}
+          principal_investigator, target_enrollment, start_date,
+          enrollment_open_date, planned_end_date, sponsor_type)
+    therapeutic_area ∈ {Cardiometabolic, Cardiology, Oncology, Neurology, Hematology,
+                        Infectious Disease, Respiratory, Nephrology, Rheumatology}
     phase ∈ {Phase 1, Phase 2, Phase 3}
     status is EXACTLY one of these three string literals: 'Recruiting',
-      'Active, not recruiting', 'Completed'. (The middle one is the full literal
-      'Active, not recruiting' — there is NO value just 'Active'.)
-      "active" / "ongoing" studies = status != 'Completed' (Recruiting + Active, not
-      recruiting); "recruiting" = status = 'Recruiting'.
+      'Active, not recruiting', 'Completed' (the middle is the full literal — there is
+      NO value just 'Active'). "active"/"ongoing" = status != 'Completed';
+      "recruiting" = status = 'Recruiting'.
     sponsor_type ∈ {Industry, Investigator-initiated, Federal}
     target_enrollment is the institution-wide target (sum of this study's site targets).
-    nct_id links a study to the public ClinicalTrials.gov registry; it is NULL for
-    unregistered studies (e.g. some investigator-initiated ones) — exclude NULLs when
-    the question is about NCT/registered trials.
-    start_date is 'YYYY-MM-DD'; for "started in <year>" use start_date LIKE '<year>-%'.
-- sites(site_id, site_name, city, state, region)
-    state is a 2-LETTER code (not the full name). The four sites are:
-      ('SITE-RST','Mayo Clinic Rochester','Rochester','MN','Midwest')
-      ('SITE-JAX','Mayo Clinic Jacksonville','Jacksonville','FL','Southeast')
-      ('SITE-PHX','Mayo Clinic Arizona','Scottsdale','AZ','Southwest')
-      ('SITE-MHS','Mayo Clinic Health System','La Crosse','WI','Midwest')
-    Map a place mentioned in the question to the right column: e.g. "Arizona"→state='AZ'
-    (or site_name LIKE '%Arizona%'), "Rochester"→city='Rochester'. Prefer matching
-    site_name with LIKE when unsure which column the user means.
-- enrollment(id, internal_id, site_id, as_of_date, screened, enrolled, target, status)
-    internal_id → studies.internal_id ; site_id → sites.site_id
-    status ∈ {Ahead, On track, Behind, Complete}
-Join studies↔enrollment on internal_id, enrollment↔sites on site_id."""
+    nct_id is NULL for unregistered studies — exclude NULLs for NCT/registered questions.
+    Dates are 'YYYY-MM-DD'; "started in <year>" → start_date LIKE '<year>-%'.
+    planned_end_date = target completion; enrollment_open_date = recruitment start.
+- sites(site_id, site_name, city, state, country, region, site_type)
+    state is a 2-LETTER US code ('' for international). The 7 sites:
+      ('SITE-RST','Mayo Clinic Rochester','Rochester','MN','USA','Midwest','Academic Medical Center')
+      ('SITE-JAX','Mayo Clinic Jacksonville','Jacksonville','FL','USA','Southeast','Academic Medical Center')
+      ('SITE-PHX','Mayo Clinic Arizona','Scottsdale','AZ','USA','Southwest','Academic Medical Center')
+      ('SITE-MHS','Mayo Clinic Health System','La Crosse','WI','USA','Midwest','Health System')
+      ('SITE-AUS','Mayo Collaborative — Austin','Austin','TX','USA','South','Community')
+      ('SITE-SEA','Mayo Collaborative — Seattle','Seattle','WA','USA','West','Academic Medical Center')
+      ('SITE-LON','Partner Site — London','London','','UK','International','Academic Medical Center')
+    Map a place to the right column: "Arizona"→state='AZ', "Rochester"→city='Rochester',
+    "London"/"international"→country='UK' or region='International'. Prefer site_name LIKE when unsure.
+- enrollment(id, internal_id, site_id, as_of_date, screened, enrolled, randomized,
+             completed, withdrawn, target, status) — MONTHLY CUMULATIVE TIME SERIES
+    (one row per study x site x month; as_of_date = 'YYYY-MM-01'; latest = 2026-05-01).
+    status ∈ {Ahead, On track, Behind, Complete}. Funnel: screened ≥ enrolled ≥
+    randomized ≥ completed.
+- enrollment_current — a VIEW = the latest snapshot per study x site (CURRENT state).
+
+*** ROUTING RULE — VERY IMPORTANT ***
+- For CURRENT enrollment ("how many enrolled", "behind target", "by site", totals NOW)
+  query the **enrollment_current** view (one row per study x site) — NEVER SUM the raw
+  `enrollment` table for current values (it would sum every monthly snapshot = wrong).
+- Only use the raw **enrollment** table for OVER-TIME / TREND / "month by month" /
+  "velocity" / "since <date>" questions (it is the monthly time series).
+Join studies↔enrollment_current on internal_id; enrollment_current↔sites on site_id."""
 
 # ── Synthetic seed data (deterministic — no RNG) ───────────────────────────────
-# NCT IDs are real ClinicalTrials.gov studies; titles/IDs/enrollment are our own.
+# Flagship NCT IDs are real ClinicalTrials.gov studies; everything else is our own.
 
-# (internal_id, nct_id, title, therapeutic_area, phase, status, PI, target, start, sponsor_type)
+# (internal_id, nct_id, title, therapeutic_area, phase, status, PI, target,
+#  start_date, enrollment_open_date, planned_end_date, sponsor_type)
 STUDIES = [
     ("MAYO-2021-014", "NCT03574597", "Semaglutide for Cardiovascular Outcomes in Overweight/Obesity",
-     "Cardiometabolic", "Phase 3", "Active, not recruiting", "Dr. Helen Park", 180, "2021-06-15", "Industry"),
+     "Cardiometabolic", "Phase 3", "Active, not recruiting", "Dr. Helen Park", 180, "2021-06-15", "2021-08-01", "2025-06-30", "Industry"),
     ("MAYO-2021-033", "NCT01994889", "Tafamidis in Transthyretin Amyloid Cardiomyopathy (ATTR-ACT)",
-     "Cardiology", "Phase 3", "Completed", "Dr. Mark Reyes", 55, "2021-04-22", "Industry"),
+     "Cardiology", "Phase 3", "Completed", "Dr. Mark Reyes", 55, "2021-04-22", "2021-06-01", "2024-03-31", "Industry"),
     ("MAYO-2022-009", "NCT03036124", "Dapagliflozin in Heart Failure with Reduced EF (DAPA-HF)",
-     "Cardiology", "Phase 3", "Completed", "Dr. Mark Reyes", 110, "2022-02-18", "Industry"),
+     "Cardiology", "Phase 3", "Completed", "Dr. Mark Reyes", 110, "2022-02-18", "2022-04-01", "2024-12-31", "Industry"),
     ("MAYO-2022-031", "NCT03548935", "Semaglutide 2.4 mg for Weight Management",
-     "Cardiometabolic", "Phase 3", "Completed", "Dr. Helen Park", 120, "2022-01-10", "Industry"),
+     "Cardiometabolic", "Phase 3", "Completed", "Dr. Helen Park", 120, "2022-01-10", "2022-03-01", "2024-06-30", "Industry"),
     ("MAYO-2023-007", "NCT02578680", "Pembrolizumab plus Chemotherapy in Metastatic NSCLC",
-     "Oncology", "Phase 3", "Active, not recruiting", "Dr. Raj Patel", 90, "2023-03-01", "Industry"),
+     "Oncology", "Phase 3", "Active, not recruiting", "Dr. Raj Patel", 90, "2023-03-01", "2023-05-01", "2026-09-30", "Industry"),
     ("MAYO-2023-022", "NCT04437511", "Donanemab in Early Symptomatic Alzheimer's Disease",
-     "Neurology", "Phase 3", "Recruiting", "Dr. Susan Cole", 75, "2023-09-12", "Industry"),
+     "Neurology", "Phase 3", "Recruiting", "Dr. Susan Cole", 75, "2023-09-12", "2023-11-01", "2027-03-31", "Industry"),
     ("MAYO-2023-041", "NCT03887455", "Lecanemab in Early Alzheimer's Disease (Clarity AD)",
-     "Neurology", "Phase 3", "Active, not recruiting", "Dr. Susan Cole", 85, "2023-11-03", "Industry"),
+     "Neurology", "Phase 3", "Active, not recruiting", "Dr. Susan Cole", 85, "2023-11-03", "2024-01-01", "2026-12-31", "Industry"),
     ("MAYO-2023-055", "NCT03954834", "Tirzepatide for Glycemic Control in Type 2 Diabetes (SURPASS)",
-     "Cardiometabolic", "Phase 3", "Active, not recruiting", "Dr. Helen Park", 95, "2023-06-27", "Industry"),
+     "Cardiometabolic", "Phase 3", "Active, not recruiting", "Dr. Helen Park", 95, "2023-06-27", "2023-08-01", "2026-06-30", "Industry"),
     ("MAYO-2024-003", "NCT01866319", "Pembrolizumab versus Ipilimumab in Advanced Melanoma",
-     "Oncology", "Phase 3", "Completed", "Dr. Raj Patel", 60, "2024-02-05", "Industry"),
+     "Oncology", "Phase 3", "Completed", "Dr. Raj Patel", 60, "2024-02-05", "2024-04-01", "2025-11-30", "Industry"),
     ("MAYO-2024-012", "NCT03434379", "Atezolizumab plus Bevacizumab in Hepatocellular Carcinoma (IMbrave150)",
-     "Oncology", "Phase 3", "Active, not recruiting", "Dr. Raj Patel", 70, "2024-03-19", "Industry"),
+     "Oncology", "Phase 3", "Active, not recruiting", "Dr. Raj Patel", 70, "2024-03-19", "2024-05-01", "2027-06-30", "Industry"),
     ("MAYO-2024-018", "NCT04368728", "mRNA Vaccine Immunogenicity Substudy",
-     "Infectious Disease", "Phase 2", "Recruiting", "Dr. Liam Foster", 50, "2024-07-20", "Federal"),
+     "Infectious Disease", "Phase 2", "Recruiting", "Dr. Liam Foster", 50, "2024-07-20", "2024-09-01", "2026-12-31", "Federal"),
     ("MAYO-2024-027", "NCT02348216", "Axicabtagene Ciloleucel in Refractory Large B-Cell Lymphoma",
-     "Hematology", "Phase 2", "Recruiting", "Dr. Anita Rao", 40, "2024-05-14", "Industry"),
+     "Hematology", "Phase 2", "Recruiting", "Dr. Anita Rao", 40, "2024-05-14", "2024-07-01", "2026-06-30", "Industry"),
     ("MAYO-2024-039", "NCT04381936", "Dexamethasone in Hospitalized COVID-19 (RECOVERY substudy)",
-     "Infectious Disease", "Phase 3", "Completed", "Dr. Liam Foster", 65, "2024-01-30", "Investigator-initiated"),
+     "Infectious Disease", "Phase 3", "Completed", "Dr. Liam Foster", 65, "2024-01-30", "2024-03-01", "2025-06-30", "Investigator-initiated"),
     ("MAYO-2025-002", None, "Investigator-Initiated CAR-NK Cell Therapy in Refractory Solid Tumors",
-     "Hematology", "Phase 1", "Recruiting", "Dr. Anita Rao", 24, "2025-01-15", "Investigator-initiated"),
+     "Hematology", "Phase 1", "Recruiting", "Dr. Anita Rao", 24, "2025-01-15", "2025-03-01", "2027-01-31", "Investigator-initiated"),
+    # ── added in the 2026-06-05 enrichment (more areas / phases / sponsors / sites) ──
+    ("MAYO-2022-047", "NCT02856828", "Nivolumab plus Ipilimumab in Advanced Renal Cell Carcinoma (CheckMate)",
+     "Oncology", "Phase 3", "Completed", "Dr. Raj Patel", 80, "2022-05-10", "2022-07-01", "2025-03-31", "Industry"),
+    ("MAYO-2023-064", "NCT03347279", "Tezepelumab in Severe Uncontrolled Asthma (NAVIGATOR)",
+     "Respiratory", "Phase 3", "Active, not recruiting", "Dr. Priya Nair", 70, "2023-08-01", "2023-10-01", "2026-10-31", "Industry"),
+    ("MAYO-2024-051", "NCT03594110", "Empagliflozin in Chronic Kidney Disease (EMPA-KIDNEY)",
+     "Nephrology", "Phase 3", "Recruiting", "Dr. Mark Reyes", 100, "2024-09-05", "2024-11-01", "2027-09-30", "Industry"),
+    ("MAYO-2022-072", "NCT02675426", "Upadacitinib in Moderate-to-Severe Rheumatoid Arthritis (SELECT)",
+     "Rheumatology", "Phase 3", "Completed", "Dr. Priya Nair", 65, "2022-09-18", "2022-11-01", "2025-02-28", "Industry"),
+    ("MAYO-2024-066", "NCT05256134", "Lecanemab Subcutaneous Maintenance Dosing",
+     "Neurology", "Phase 2", "Recruiting", "Dr. Susan Cole", 45, "2024-10-22", "2024-12-01", "2026-12-31", "Industry"),
+    ("MAYO-2025-011", None, "Investigator-Initiated CRISPR Gene Editing in Sickle Cell Disease",
+     "Hematology", "Phase 1", "Recruiting", "Dr. Anita Rao", 18, "2025-02-20", "2025-04-01", "2027-02-28", "Investigator-initiated"),
+    ("MAYO-2023-088", "NCT04944992", "Semaglutide in Non-alcoholic Steatohepatitis (NASH/MASH)",
+     "Cardiometabolic", "Phase 2", "Active, not recruiting", "Dr. Helen Park", 55, "2023-12-01", "2024-02-01", "2026-05-31", "Industry"),
+    ("MAYO-2024-079", "NCT04576988", "Sotatercept in Pulmonary Arterial Hypertension (STELLAR)",
+     "Cardiology", "Phase 3", "Recruiting", "Dr. Mark Reyes", 60, "2024-11-14", "2025-01-01", "2028-01-31", "Industry"),
 ]
 
-# (site_id, site_name, city, state, region)
+# (site_id, site_name, city, state, country, region, site_type)
 SITES = [
-    ("SITE-RST", "Mayo Clinic Rochester", "Rochester", "MN", "Midwest"),
-    ("SITE-JAX", "Mayo Clinic Jacksonville", "Jacksonville", "FL", "Southeast"),
-    ("SITE-PHX", "Mayo Clinic Arizona", "Scottsdale", "AZ", "Southwest"),
-    ("SITE-MHS", "Mayo Clinic Health System", "La Crosse", "WI", "Midwest"),
+    ("SITE-RST", "Mayo Clinic Rochester", "Rochester", "MN", "USA", "Midwest", "Academic Medical Center"),
+    ("SITE-JAX", "Mayo Clinic Jacksonville", "Jacksonville", "FL", "USA", "Southeast", "Academic Medical Center"),
+    ("SITE-PHX", "Mayo Clinic Arizona", "Scottsdale", "AZ", "USA", "Southwest", "Academic Medical Center"),
+    ("SITE-MHS", "Mayo Clinic Health System", "La Crosse", "WI", "USA", "Midwest", "Health System"),
+    ("SITE-AUS", "Mayo Collaborative — Austin", "Austin", "TX", "USA", "South", "Community"),
+    ("SITE-SEA", "Mayo Collaborative — Seattle", "Seattle", "WA", "USA", "West", "Academic Medical Center"),
+    ("SITE-LON", "Partner Site — London", "London", "", "UK", "International", "Academic Medical Center"),
 ]
 
-# (id, internal_id, site_id, as_of_date, screened, enrolled, target, status)
-_AS_OF = "2025-03-31"
-ENROLLMENT = [
-    # MAYO-2021-014 (target 180) — mature, mostly complete
-    (1,  "MAYO-2021-014", "SITE-RST", _AS_OF, 142, 96, 90, "Ahead"),
-    (2,  "MAYO-2021-014", "SITE-JAX", _AS_OF, 78,  52, 50, "On track"),
-    (3,  "MAYO-2021-014", "SITE-PHX", _AS_OF, 49,  31, 40, "Behind"),
-    # MAYO-2022-031 (target 120) — completed
-    (4,  "MAYO-2022-031", "SITE-RST", _AS_OF, 95,  70, 70, "Complete"),
-    (5,  "MAYO-2022-031", "SITE-JAX", _AS_OF, 63,  50, 50, "Complete"),
-    # MAYO-2023-007 (target 90) — oncology, active
-    (6,  "MAYO-2023-007", "SITE-RST", _AS_OF, 61,  38, 45, "Behind"),
-    (7,  "MAYO-2023-007", "SITE-PHX", _AS_OF, 40,  27, 25, "Ahead"),
-    (8,  "MAYO-2023-007", "SITE-MHS", _AS_OF, 22,  14, 20, "Behind"),
-    # MAYO-2023-022 (target 75) — recruiting, early
-    (9,  "MAYO-2023-022", "SITE-RST", _AS_OF, 55,  24, 35, "Behind"),
-    (10, "MAYO-2023-022", "SITE-JAX", _AS_OF, 38,  19, 20, "On track"),
-    (11, "MAYO-2023-022", "SITE-PHX", _AS_OF, 31,  18, 20, "On track"),
-    # MAYO-2024-003 (target 60) — completed melanoma
-    (12, "MAYO-2024-003", "SITE-PHX", _AS_OF, 48,  35, 35, "Complete"),
-    (13, "MAYO-2024-003", "SITE-RST", _AS_OF, 33,  25, 25, "Complete"),
-    # MAYO-2024-018 (target 50) — newest, recruiting
-    (14, "MAYO-2024-018", "SITE-RST", _AS_OF, 27,  12, 25, "Behind"),
-    (15, "MAYO-2024-018", "SITE-MHS", _AS_OF, 19,  11, 25, "Behind"),
-    # MAYO-2021-033 (target 55) — ATTR cardiomyopathy, completed
-    (16, "MAYO-2021-033", "SITE-RST", _AS_OF, 60,  35, 35, "Complete"),
-    (17, "MAYO-2021-033", "SITE-JAX", _AS_OF, 35,  20, 20, "Complete"),
-    # MAYO-2022-009 (target 110) — DAPA-HF, completed
-    (18, "MAYO-2022-009", "SITE-RST", _AS_OF, 92,  60, 60, "Complete"),
-    (19, "MAYO-2022-009", "SITE-JAX", _AS_OF, 78,  50, 50, "Complete"),
-    # MAYO-2023-041 (target 85) — lecanemab, active
-    (20, "MAYO-2023-041", "SITE-RST", _AS_OF, 70,  40, 40, "On track"),
-    (21, "MAYO-2023-041", "SITE-JAX", _AS_OF, 45,  26, 25, "Ahead"),
-    (22, "MAYO-2023-041", "SITE-PHX", _AS_OF, 32,  16, 20, "Behind"),
-    # MAYO-2023-055 (target 95) — tirzepatide, active
-    (23, "MAYO-2023-055", "SITE-RST", _AS_OF, 80,  50, 50, "On track"),
-    (24, "MAYO-2023-055", "SITE-JAX", _AS_OF, 55,  33, 30, "Ahead"),
-    (25, "MAYO-2023-055", "SITE-MHS", _AS_OF, 25,  13, 15, "Behind"),
-    # MAYO-2024-012 (target 70) — atezolizumab HCC, active
-    (26, "MAYO-2024-012", "SITE-RST", _AS_OF, 55,  35, 35, "On track"),
-    (27, "MAYO-2024-012", "SITE-JAX", _AS_OF, 40,  24, 25, "Behind"),
-    (28, "MAYO-2024-012", "SITE-PHX", _AS_OF, 18,   9, 10, "Behind"),
-    # MAYO-2024-027 (target 40) — CAR-T lymphoma, recruiting
-    (29, "MAYO-2024-027", "SITE-RST", _AS_OF, 38,  18, 25, "Behind"),
-    (30, "MAYO-2024-027", "SITE-PHX", _AS_OF, 22,  11, 15, "Behind"),
-    # MAYO-2024-039 (target 65) — dexamethasone COVID, completed
-    (31, "MAYO-2024-039", "SITE-RST", _AS_OF, 70,  40, 40, "Complete"),
-    (32, "MAYO-2024-039", "SITE-MHS", _AS_OF, 30,  25, 25, "Complete"),
-    # MAYO-2025-002 (target 24) — investigator-initiated CAR-NK, recruiting, no NCT yet
-    (33, "MAYO-2025-002", "SITE-RST", _AS_OF, 20,   8, 14, "Behind"),
-    (34, "MAYO-2025-002", "SITE-PHX", _AS_OF, 12,   5, 10, "Behind"),
+# Current (latest-snapshot) state per study x site — drives the generated time series.
+# (internal_id, site_id, site_target, current_screened, current_enrolled, current_status)
+# The original 14 studies keep their exact totals (so prior facts/tests hold); new
+# studies add the new sites (AUS/SEA/LON) for geographic richness.
+_CURRENT = [
+    ("MAYO-2021-014", "SITE-RST", 90, 142, 96, "Ahead"),
+    ("MAYO-2021-014", "SITE-JAX", 50, 78,  52, "On track"),
+    ("MAYO-2021-014", "SITE-PHX", 40, 49,  31, "Behind"),
+    ("MAYO-2022-031", "SITE-RST", 70, 95,  70, "Complete"),
+    ("MAYO-2022-031", "SITE-JAX", 50, 63,  50, "Complete"),
+    ("MAYO-2023-007", "SITE-RST", 45, 61,  38, "Behind"),
+    ("MAYO-2023-007", "SITE-PHX", 25, 40,  27, "Ahead"),
+    ("MAYO-2023-007", "SITE-MHS", 20, 22,  14, "Behind"),
+    ("MAYO-2023-022", "SITE-RST", 35, 55,  24, "Behind"),
+    ("MAYO-2023-022", "SITE-JAX", 20, 38,  19, "On track"),
+    ("MAYO-2023-022", "SITE-PHX", 20, 31,  18, "On track"),
+    ("MAYO-2024-003", "SITE-PHX", 35, 48,  35, "Complete"),
+    ("MAYO-2024-003", "SITE-RST", 25, 33,  25, "Complete"),
+    ("MAYO-2024-018", "SITE-RST", 25, 27,  12, "Behind"),
+    ("MAYO-2024-018", "SITE-MHS", 25, 19,  11, "Behind"),
+    ("MAYO-2021-033", "SITE-RST", 35, 60,  35, "Complete"),
+    ("MAYO-2021-033", "SITE-JAX", 20, 35,  20, "Complete"),
+    ("MAYO-2022-009", "SITE-RST", 60, 92,  60, "Complete"),
+    ("MAYO-2022-009", "SITE-JAX", 50, 78,  50, "Complete"),
+    ("MAYO-2023-041", "SITE-RST", 40, 70,  40, "On track"),
+    ("MAYO-2023-041", "SITE-JAX", 25, 45,  26, "Ahead"),
+    ("MAYO-2023-041", "SITE-PHX", 20, 32,  16, "Behind"),
+    ("MAYO-2023-055", "SITE-RST", 50, 80,  50, "On track"),
+    ("MAYO-2023-055", "SITE-JAX", 30, 55,  33, "Ahead"),
+    ("MAYO-2023-055", "SITE-MHS", 15, 25,  13, "Behind"),
+    ("MAYO-2024-012", "SITE-RST", 35, 55,  35, "On track"),
+    ("MAYO-2024-012", "SITE-JAX", 25, 40,  24, "Behind"),
+    ("MAYO-2024-012", "SITE-PHX", 10, 18,   9, "Behind"),
+    ("MAYO-2024-027", "SITE-RST", 25, 38,  18, "Behind"),
+    ("MAYO-2024-027", "SITE-PHX", 15, 22,  11, "Behind"),
+    ("MAYO-2024-039", "SITE-RST", 40, 70,  40, "Complete"),
+    ("MAYO-2024-039", "SITE-MHS", 25, 30,  25, "Complete"),
+    ("MAYO-2025-002", "SITE-RST", 14, 20,   8, "Behind"),
+    ("MAYO-2025-002", "SITE-PHX", 10, 12,   5, "Behind"),
+    # new studies (introduce AUS / SEA / LON)
+    ("MAYO-2022-047", "SITE-RST", 45, 70,  45, "Complete"),
+    ("MAYO-2022-047", "SITE-SEA", 35, 55,  35, "Complete"),
+    ("MAYO-2023-064", "SITE-RST", 30, 48,  30, "On track"),
+    ("MAYO-2023-064", "SITE-JAX", 25, 35,  22, "On track"),
+    ("MAYO-2023-064", "SITE-AUS", 15, 20,  12, "Behind"),
+    ("MAYO-2024-051", "SITE-RST", 40, 55,  28, "Behind"),
+    ("MAYO-2024-051", "SITE-SEA", 35, 35,  18, "Behind"),
+    ("MAYO-2024-051", "SITE-MHS", 25, 22,  12, "Behind"),
+    ("MAYO-2022-072", "SITE-RST", 40, 60,  40, "Complete"),
+    ("MAYO-2022-072", "SITE-JAX", 25, 42,  25, "Complete"),
+    ("MAYO-2024-066", "SITE-RST", 25, 30,  16, "On track"),
+    ("MAYO-2024-066", "SITE-PHX", 20, 20,  11, "Behind"),
+    ("MAYO-2025-011", "SITE-RST", 10, 12,   6, "Behind"),
+    ("MAYO-2025-011", "SITE-SEA", 8,  7,    3, "Behind"),
+    ("MAYO-2023-088", "SITE-RST", 30, 48,  30, "Ahead"),
+    ("MAYO-2023-088", "SITE-JAX", 25, 35,  22, "On track"),
+    ("MAYO-2024-079", "SITE-RST", 30, 32,  18, "Behind"),
+    ("MAYO-2024-079", "SITE-AUS", 15, 18,  10, "Behind"),
+    ("MAYO-2024-079", "SITE-LON", 15, 15,   8, "On track"),
 ]
+
+_AS_OF = "2026-05-01"        # latest monthly snapshot ("current")
+_AS_OF_YM = (2026, 5)
+
+
+def _ease(x: float) -> float:
+    """Smoothstep 0..1 — gives accrual curves a gentle S shape."""
+    x = 0.0 if x < 0 else 1.0 if x > 1 else x
+    return x * x * (3 - 2 * x)
+
+
+def _build_enrollment_rows():
+    """Expand each current (study x site) state into a monthly CUMULATIVE time series
+    from the study's enrollment_open_date to the as-of month. Deterministic. The final
+    month equals the current values, so enrollment_current reproduces the intended state."""
+    studies_by_id = {s[0]: s for s in STUDIES}
+    rows, rid = [], 0
+    for internal_id, site_id, target, cur_scr, cur_enr, cur_status in _CURRENT:
+        st = studies_by_id[internal_id]
+        study_status, open_date = st[5], st[9]
+        y, m = int(open_date[:4]), int(open_date[5:7])
+        months = []
+        while (y, m) <= _AS_OF_YM:
+            months.append(f"{y:04d}-{m:02d}-01")
+            m += 1
+            if m > 12:
+                m, y = 1, y + 1
+        n = len(months)
+        # Completed studies reach final ~70% through their window then plateau.
+        ramp_to = max(1, round(n * (0.7 if study_status == "Completed" else 1.0)))
+        for i, mdate in enumerate(months):
+            f = _ease(min(1.0, (i + 1) / ramp_to))
+            enrolled = round(cur_enr * f)
+            screened = max(enrolled, round(cur_scr * _ease(min(1.0, (i + 1) / ramp_to * 1.08))))
+            randomized = round(enrolled * 0.96)
+            late = _ease(max(0.0, (i + 1 - ramp_to * 0.45) / max(1, n - ramp_to * 0.45)))
+            completed = round(enrolled * (0.85 if study_status == "Completed" else 0.2) * late)
+            withdrawn = round(enrolled * 0.05 * f)
+            rid += 1
+            rows.append((rid, internal_id, site_id, mdate, screened, enrolled,
+                         randomized, completed, withdrawn, target, cur_status))
+    return rows
 
 
 def ensure_db(db_path: str = TRIAL_OPS_DB_PATH) -> str:
@@ -208,9 +304,10 @@ def ensure_db(db_path: str = TRIAL_OPS_DB_PATH) -> str:
     con = sqlite3.connect(db_path)
     try:
         con.executescript(SCHEMA_DDL)
-        con.executemany("INSERT INTO studies VALUES (?,?,?,?,?,?,?,?,?,?)", STUDIES)
-        con.executemany("INSERT INTO sites VALUES (?,?,?,?,?)", SITES)
-        con.executemany("INSERT INTO enrollment VALUES (?,?,?,?,?,?,?,?)", ENROLLMENT)
+        con.executemany("INSERT INTO studies VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", STUDIES)
+        con.executemany("INSERT INTO sites VALUES (?,?,?,?,?,?,?)", SITES)
+        con.executemany("INSERT INTO enrollment VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                        _build_enrollment_rows())
         con.commit()
     finally:
         con.close()
@@ -221,15 +318,16 @@ def ensure_db(db_path: str = TRIAL_OPS_DB_PATH) -> str:
 # ── NL → SQL generation ────────────────────────────────────────────────────────
 
 FEW_SHOT = """\
+-- CURRENT enrollment → use the enrollment_current VIEW (one row per study x site).
 Q: How is enrollment tracking across our trials?
 SQL: SELECT s.internal_id, s.title, SUM(e.enrolled) AS enrolled, s.target_enrollment
-     FROM studies s JOIN enrollment e ON e.internal_id = s.internal_id
+     FROM studies s JOIN enrollment_current e ON e.internal_id = s.internal_id
      GROUP BY s.internal_id ORDER BY enrolled DESC;
 
 Q: Which of our sites is furthest behind its enrollment target?   -- "furthest behind" = fill rate, NOT absolute gap
 SQL: SELECT si.site_name, SUM(e.enrolled) AS enrolled, SUM(e.target) AS target,
      ROUND(SUM(e.enrolled) * 100.0 / SUM(e.target), 1) AS pct_of_target
-     FROM enrollment e JOIN sites si ON si.site_id = e.site_id
+     FROM enrollment_current e JOIN sites si ON si.site_id = e.site_id
      GROUP BY e.site_id ORDER BY pct_of_target ASC;
 
 Q: Show our active Phase 3 oncology studies.
@@ -239,18 +337,18 @@ SQL: SELECT internal_id, nct_id, title, status, principal_investigator
 
 Q: What is our enrollment on the donanemab trial?   -- a SPECIFIC named trial: return the real IDs + the study TOTAL (never a per-site row)
 SQL: SELECT s.internal_id, s.nct_id, s.title, SUM(e.enrolled) AS enrolled, s.target_enrollment
-     FROM studies s JOIN enrollment e ON e.internal_id = s.internal_id
+     FROM studies s JOIN enrollment_current e ON e.internal_id = s.internal_id
      WHERE s.title LIKE '%Donanemab%' GROUP BY s.internal_id;
 
 Q: Which of our studies has the worst enrollment?   -- "worst/best/lagging enrollment" = fill rate, NOT absolute count
 SQL: SELECT s.internal_id, s.title, SUM(e.enrolled) AS enrolled, s.target_enrollment,
      ROUND(SUM(e.enrolled) * 100.0 / s.target_enrollment, 1) AS pct_of_target
-     FROM studies s JOIN enrollment e ON e.internal_id = s.internal_id
+     FROM studies s JOIN enrollment_current e ON e.internal_id = s.internal_id
      GROUP BY s.internal_id ORDER BY pct_of_target ASC;
 
 Q: Which PIs have trials that are behind target?   -- count TRIALS, not site rows
 SQL: SELECT s.principal_investigator, COUNT(DISTINCT s.internal_id) AS trials_behind
-     FROM studies s JOIN enrollment e ON e.internal_id = s.internal_id
+     FROM studies s JOIN enrollment_current e ON e.internal_id = s.internal_id
      WHERE e.status = 'Behind' GROUP BY s.principal_investigator
      ORDER BY trials_behind DESC;
 
@@ -260,7 +358,7 @@ SQL: SELECT COUNT(*) AS active_studies FROM studies WHERE status != 'Completed';
 Q: How are we doing?   -- vague status question → portfolio enrollment-vs-target summary
 SQL: SELECT s.internal_id, s.title, SUM(e.enrolled) AS enrolled, s.target_enrollment,
      ROUND(SUM(e.enrolled) * 100.0 / s.target_enrollment, 1) AS pct_of_target
-     FROM studies s JOIN enrollment e ON e.internal_id = s.internal_id
+     FROM studies s JOIN enrollment_current e ON e.internal_id = s.internal_id
      GROUP BY s.internal_id ORDER BY pct_of_target ASC;
 
 Q: What is Dr. Raj Patel researching / working on?   -- a PI's research/work = the studies they lead
@@ -271,21 +369,31 @@ Q: Who is leading / running the donanemab trial?   -- study → its PI (inverse 
 SQL: SELECT title, principal_investigator, phase, status FROM studies
      WHERE title LIKE '%Donanemab%';
 
-Q: What is happening at our Florida site?   -- a place → its site; list that site's trials + enrollment
+Q: What is happening at our Florida site?   -- a place → its site; list that site's trials + current enrollment
 SQL: SELECT s.title, e.enrolled, e.target, e.status
-     FROM enrollment e JOIN studies s ON s.internal_id = e.internal_id
+     FROM enrollment_current e JOIN studies s ON s.internal_id = e.internal_id
      JOIN sites si ON si.site_id = e.site_id
      WHERE si.state = 'FL' OR si.city = 'Jacksonville' OR si.site_name LIKE '%Florida%';
 
 Q: How many patients have we enrolled at the Rochester site?
 SQL: SELECT si.site_name, SUM(e.enrolled) AS enrolled
-     FROM enrollment e JOIN sites si ON si.site_id = e.site_id
+     FROM enrollment_current e JOIN sites si ON si.site_id = e.site_id
      WHERE si.city = 'Rochester' GROUP BY e.site_id;
 
 Q: Enrollment by site for NCT02578680.
 SQL: SELECT si.site_name, e.screened, e.enrolled, e.target, e.status
+     FROM enrollment_current e JOIN studies s ON s.internal_id = e.internal_id
+     JOIN sites si ON si.site_id = e.site_id WHERE s.nct_id = 'NCT02578680';
+
+-- OVER-TIME / TREND → use the raw enrollment time series (monthly snapshots).
+Q: Show the monthly enrollment trend for the donanemab trial.
+SQL: SELECT e.as_of_date, SUM(e.enrolled) AS enrolled
      FROM enrollment e JOIN studies s ON s.internal_id = e.internal_id
-     JOIN sites si ON si.site_id = e.site_id WHERE s.nct_id = 'NCT02578680';"""
+     WHERE s.title LIKE '%Donanemab%' GROUP BY e.as_of_date ORDER BY e.as_of_date;
+
+Q: Enrollment over time across all our studies (last 12 months).
+SQL: SELECT as_of_date, SUM(enrolled) AS enrolled FROM enrollment
+     GROUP BY as_of_date ORDER BY as_of_date DESC LIMIT 12;"""
 
 _SQLGEN_SYSTEM = f"""You translate a question about Mayo Clinic's INTERNAL trial-operations \
 database into ONE SQLite SELECT query.
@@ -306,8 +414,12 @@ Rules:
 - "worst / best / lagging / leading / how is X tracking" about enrollment = rank by FILL
   RATE (SUM(enrolled)*1.0/target), not absolute count (a small-target study naturally has
   fewer patients).
-- Counting trials/studies from the enrollment table uses COUNT(DISTINCT internal_id) —
-  enrollment has one row PER SITE, so COUNT(*) over-counts.
+- **CURRENT enrollment (how many enrolled, behind target, by site, totals NOW) → query the
+  `enrollment_current` VIEW.** NEVER SUM the raw `enrollment` table for current values — it's
+  a monthly time series, so summing it adds up every snapshot = badly wrong. Use the raw
+  `enrollment` table ONLY for over-time / trend / month-by-month / velocity questions.
+- Counting trials/studies from enrollment_current uses COUNT(DISTINCT internal_id) —
+  it has one row PER SITE, so COUNT(*) over-counts.
 - A vague status question about our work ("how are we doing?", "where do we stand?",
   "give me a status update") = the portfolio enrollment-vs-target summary (per study,
   with % of target).

@@ -28,8 +28,9 @@ def not_used(sub):   return ("not_used", sub)
 # (question, [checks]) — each case encodes a bug we fixed this session.
 CASES = [
     # count → exact number, NO fabricated "Study 1 — 20/50" list (synthesis fabrication)
-    ("how many active studies do we have",        [has("9"), absent("study 1", "study 2")]),
-    ("how many completed studies do we have",     [has("5"), absent("study 1")]),
+    # (counts reflect the 2026-06-05 enriched DB: 22 studies, 15 active / 7 completed)
+    ("how many active studies do we have",        [has("15"), absent("study 1", "study 2")]),
+    ("how many completed studies do we have",     [has("7"), absent("study 1")]),
     # Alzheimer's → BOTH studies, no omission, no invented enrollment
     ("what study are we doing related to alzheimers", [has("mayo-2023-022", "mayo-2023-041")]),
     # study→PI and PI→studies (indirect-phrasing class)
