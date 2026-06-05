@@ -491,13 +491,15 @@ def _assert_read_only(sql: str) -> str:
     return s
 
 
-def _run_readonly(sql: str, db_path: str):
+def _run_readonly(sql: str, db_path: str, limit: int = 50):
+    # Text answers cap at 50 rows; charts need more — a monthly time series spans
+    # years (e.g. 60 months × studies), so a 50-row cap silently truncates the trend.
     con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     try:
         con.execute("PRAGMA query_only = ON")
         cur = con.execute(sql)
         cols = [d[0] for d in cur.description] if cur.description else []
-        rows = cur.fetchmany(50)
+        rows = cur.fetchmany(limit)
         return cols, rows
     finally:
         con.close()
@@ -686,13 +688,15 @@ async def _plot_answer(question: str, db_path: str):
                 "demographics, or outcomes). I can chart enrollment by study or site, trends "
                 "over time, recruitment funnels, or portfolio breakdowns.", None)
     clean = _assert_read_only(spec.get("sql", ""))
-    cols, rows = _run_readonly(clean, db_path)
+    cols, rows = _run_readonly(clean, db_path, limit=2000)   # charts need the full series
     if not rows:
         return ("No internal data matched that chart request — try our enrollment by "
                 "study/site, a trend over time, or a portfolio breakdown.", None)
     fig = _build_figure(spec, cols, rows)
     _log.info("plot_trial_operations chart=%s SQL: %s", spec.get("chart_type"), clean)
-    table = _format_rows(cols, rows[:30])
+    # Show the insight model the MOST RECENT rows (a trend is oldest-first, so the
+    # tail holds the current values — the first 30 would be stale early months).
+    table = _format_rows(cols, rows[-30:])
     summary = (
         f"A {spec.get('chart_type', 'bar')} chart titled \"{spec.get('title', '')}\" has "
         "been rendered for the user from OUR internal trial-operations data. Add ONE short "
@@ -700,9 +704,10 @@ async def _plot_answer(question: str, db_path: str):
         "below. Do NOT rename a category (e.g. never write 'Cardiovascular' for 'Cardiology'); "
         "do NOT add a qualifier the data doesn't state (e.g. don't call a plain count 'active' "
         "unless a column says so); do NOT re-list every row; do NOT invent any value. If two "
-        "categories tie, say they tie. Do NOT write any markdown image or link (no "
-        "![...](...) and no attachment://) — the chart is already displayed above your text."
-        f"\nChart data:\n{table}"
+        "categories tie, say they tie. For a TREND / over-time chart, describe the LATEST "
+        "(most recent / final) value and the overall direction — not an arbitrary mid-point. "
+        "Do NOT write any markdown image or link (no ![...](...) and no attachment://) — the "
+        f"chart is already displayed above your text.\nChart data (most recent rows last):\n{table}"
     )
     return (summary, fig.to_json())
 
