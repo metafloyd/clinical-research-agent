@@ -259,12 +259,17 @@ async def _new_db_session(user) -> str:
 @cl.on_chat_start
 async def on_chat_start():
     user = cl.user_session.get("user")
-    try:
-        cl.user_session.set("db_session_id", await _new_db_session(user))
-    except Exception as exc:
-        _log.error("on_chat_start db init failed (non-fatal): %r", exc)
     cl.user_session.set("lc_messages", [])
     cl.user_session.set("turn", 0)
+    # Open the analytics session row in the BACKGROUND — don't block the connection
+    # handler on two serial remote-Postgres round-trips. handle_query lazily ensures
+    # db_session_id if a message arrives before this finishes.
+    async def _open_session_bg():
+        try:
+            cl.user_session.set("db_session_id", await _new_db_session(user))
+        except Exception as exc:
+            _log.error("deferred _new_db_session (start) failed: %r", exc)
+    asyncio.create_task(_open_session_bg())
     # Warm the agent in the background — do NOT await (would block the connection).
     asyncio.create_task(_ensure_agent())
 
@@ -294,7 +299,18 @@ async def on_chat_resume(thread):
         cl.user_session.set("lc_messages", lc)
         cl.user_session.set("turn", len(lc) // 2)
 
-        cl.user_session.set("db_session_id", await _new_db_session(cl.user_session.get("user")))
+        # Open the analytics chat_sessions row in the BACKGROUND. on_chat_resume is
+        # awaited inline in the websocket connection handler, and _new_db_session is
+        # TWO serial round-trips to the remote Postgres (~1-3s) — awaiting it here just
+        # delays the page becoming interactive. db_session_id isn't read until the user
+        # sends a message (handle_query), which lazily ensures it if not ready yet.
+        _user = cl.user_session.get("user")
+        async def _open_session_bg():
+            try:
+                cl.user_session.set("db_session_id", await _new_db_session(_user))
+            except Exception as exc:
+                _log.error("deferred _new_db_session (resume) failed: %r", exc)
+        asyncio.create_task(_open_session_bg())
     except Exception as exc:
         _log.error("on_chat_resume failed: %r", exc)
 
@@ -310,6 +326,15 @@ async def handle_query(query: str):
     lc_msgs = cl.user_session.get("lc_messages", [])
     sid     = cl.user_session.get("db_session_id")
     turn    = cl.user_session.get("turn", 0)
+
+    # The analytics session row is opened in the background on start/resume so it
+    # doesn't block the reload. If a message arrives before it's ready, open it now.
+    if not sid:
+        try:
+            sid = await _new_db_session(cl.user_session.get("user"))
+            cl.user_session.set("db_session_id", sid)
+        except Exception as exc:
+            _log.error("lazy _new_db_session failed (non-fatal): %r", exc)
 
     # Build the agent on first message (warmed in the background at chat start/resume).
     try:
