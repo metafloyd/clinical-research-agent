@@ -337,19 +337,17 @@ async def handle_query(query: str):
             lines.extend(f"- [PMID {pmid}](https://pubmed.ncbi.nlm.nih.gov/{pmid}/)" for pmid in pm[:5])
         await msg.stream_token("\n\n---\n\n**📎 Sources**\n\n" + "\n".join(lines))
 
-    # Attach any internal-data charts (plot_trial_operations) as inline images.
-    # Render to a static PNG rather than cl.Plotly: an <img> restores reliably from the
-    # stored URL on reload, whereas Chainlit's Plotly element doesn't re-fetch its figure
-    # on resume (the chart came back as empty axes).
+    # Attach any internal-data charts (plot_trial_operations) as inline images. The tool
+    # returns a base64 PNG (rendered with matplotlib — headless, no browser, works on
+    # Render). An <img> restores reliably from the stored URL on reload, unlike cl.Plotly
+    # (which came back as empty axes).
     if charts:
-        import plotly.io as _pio
-        for i, figjson in enumerate(charts):
+        import base64
+        for i, b64 in enumerate(charts):
             try:
-                fig = _pio.from_json(figjson)
-                png = await asyncio.to_thread(
-                    fig.to_image, format="png", width=920, height=400, scale=2)
                 msg.elements.append(
-                    cl.Image(name=f"chart-{i}", content=png, mime="image/png", display="inline")
+                    cl.Image(name=f"chart-{i}", content=base64.b64decode(b64),
+                             mime="image/png", display="inline")
                 )
             except Exception as chart_exc:
                 _log.warning("Chart render failed (non-fatal): %r", chart_exc)

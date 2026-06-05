@@ -632,51 +632,91 @@ async def _generate_chart_spec(question: str) -> dict:
     return _json.loads(m.group(0))
 
 
-def _build_figure(spec: dict, cols, rows):
-    import plotly.graph_objects as go
+def _build_png(spec: dict, cols, rows) -> bytes:
+    """Render the chart with matplotlib (headless Agg → PNG bytes). No browser needed,
+    so it works on any server — unlike plotly+kaleido, which needs a Chrome binary that
+    slim containers (Render) don't have. Static, brand-styled, persists via cl.Image."""
+    import io
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
     cd = {c: [r[i] for r in rows] for i, c in enumerate(cols)}
     ctype = (spec.get("chart_type") or "bar").lower()
     x = spec.get("x"); color = spec.get("color"); title = spec.get("title") or ""
     ys = spec.get("y") or []
     ys = [ys] if isinstance(ys, str) else list(ys)
     ys = [y for y in ys if y in cd] or [c for c in cols if c != x][:1]
-    fig = go.Figure()
+
+    def lab(s):
+        return str(s).replace("_", " ").title()
+
+    fig, ax = plt.subplots(figsize=(9.2, 4.2), dpi=130)
+    fig.patch.set_facecolor("white")
 
     if ctype in ("donut", "pie"):
-        fig.add_trace(go.Pie(labels=cd.get(x, []), values=cd[ys[0]], hole=0.5,
-                             marker=dict(colors=_PALETTE)))
+        labels = [str(v) for v in cd.get(x, [])]
+        vals = [v if isinstance(v, (int, float)) else 0 for v in cd[ys[0]]]
+        ax.pie(vals, labels=labels, autopct="%1.1f%%", startangle=90,
+               colors=_PALETTE, pctdistance=0.78, textprops=dict(fontsize=8),
+               wedgeprops=dict(width=0.42, edgecolor="white"))
+        ax.axis("equal")
     elif ctype == "funnel":
         stages = ys
         vals = [sum(v for v in cd[s] if isinstance(v, (int, float))) for s in stages]
-        fig.add_trace(go.Funnel(y=[s.replace("_", " ").title() for s in stages], x=vals,
-                                marker=dict(color=_BRAND)))
+        maxv = max(vals) or 1
+        for i, (s, v) in enumerate(zip(stages, vals)):
+            yy = len(stages) - 1 - i
+            w = v / maxv
+            ax.barh(yy, w, left=(1 - w) / 2, height=0.72, color=_BRAND)
+            ax.text(0.5, yy, f"{lab(s)}:  {v:,}", ha="center", va="center",
+                    color="white", fontsize=10, fontweight="bold")
+        ax.set_xlim(0, 1); ax.set_ylim(-0.6, len(stages) - 0.4); ax.axis("off")
     elif ctype == "line":
-        if color and color in cd and ys:
+        series = []
+        if color and color in cd:
             groups = {}
             for xi, ci, yi in zip(cd[x], cd[color], cd[ys[0]]):
                 groups.setdefault(ci, ([], []))
                 groups[ci][0].append(xi); groups[ci][1].append(yi)
-            for i, (g, (gx, gy)) in enumerate(groups.items()):
-                fig.add_trace(go.Scatter(x=gx, y=gy, mode="lines+markers", name=str(g),
-                                         line=dict(color=_PALETTE[i % len(_PALETTE)])))
+            series = [(str(g), gx, gy) for g, (gx, gy) in groups.items()]
         else:
-            for i, y in enumerate(ys):
-                fig.add_trace(go.Scatter(x=cd.get(x, []), y=cd[y], mode="lines+markers",
-                                         name=y.replace("_", " ").title(),
-                                         line=dict(color=_PALETTE[i % len(_PALETTE)])))
-    else:  # bar / grouped bar (default)
-        for i, y in enumerate(ys):
-            fig.add_trace(go.Bar(x=cd.get(x, []), y=cd[y],
-                                 name=y.replace("_", " ").title(),
-                                 marker_color=_PALETTE[i % len(_PALETTE)]))
-        fig.update_layout(barmode="group")
+            series = [(lab(y), cd.get(x, []), cd[y]) for y in ys]
+        for i, (name, gx, gy) in enumerate(series):
+            ax.plot(gx, gy, marker="o", ms=3, lw=2,
+                    color=_PALETTE[i % len(_PALETTE)], label=name)
+        ax.legend(fontsize=8, loc="upper left", frameon=False)
+        xs = (series[0][1] if series else cd.get(x, []))
+        if len(xs) > 14:                       # thin dense (monthly) x ticks
+            step = max(1, len(xs) // 10)
+            ax.set_xticks([xs[i] for i in range(0, len(xs), step)])
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=7)
+        ax.grid(axis="y", color="#EEF2F7"); ax.set_axisbelow(True)
+        for sp in ("top", "right"):
+            ax.spines[sp].set_visible(False)
+    else:  # grouped bar (default)
+        labels = [str(v) for v in cd.get(x, [])]
+        idx = list(range(len(labels)))
+        n = len(ys); width = 0.8 / max(n, 1)
+        for j, y in enumerate(ys):
+            pos = [i + (j - (n - 1) / 2) * width for i in idx]
+            ax.bar(pos, cd[y], width=width, color=_PALETTE[j % len(_PALETTE)], label=lab(y))
+        ax.set_xticks(idx)
+        ax.set_xticklabels(labels, rotation=30, ha="right", fontsize=8)
+        if n > 1:
+            ax.legend(fontsize=8, frameon=False)
+        ax.grid(axis="y", color="#EEF2F7"); ax.set_axisbelow(True)
+        for sp in ("top", "right"):
+            ax.spines[sp].set_visible(False)
 
-    fig.update_layout(title=dict(text=title, font=dict(size=16, color=_BRAND)),
-                      template="plotly_white", colorway=_PALETTE,
-                      font=dict(family="Inter, system-ui, sans-serif", size=12),
-                      margin=dict(t=48, l=12, r=12, b=12), height=380,
-                      legend=dict(orientation="h", y=-0.18))
-    return fig
+    if ctype not in ("donut", "pie", "funnel"):
+        ax.tick_params(colors="#475569")
+    ax.set_title(title, color=_BRAND, fontsize=13, fontweight="bold", loc="left", pad=12)
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    return buf.getvalue()
 
 
 async def _plot_answer(question: str, db_path: str):
@@ -692,7 +732,8 @@ async def _plot_answer(question: str, db_path: str):
     if not rows:
         return ("No internal data matched that chart request — try our enrollment by "
                 "study/site, a trend over time, or a portfolio breakdown.", None)
-    fig = _build_figure(spec, cols, rows)
+    import base64
+    png_b64 = base64.b64encode(_build_png(spec, cols, rows)).decode("ascii")
     _log.info("plot_trial_operations chart=%s SQL: %s", spec.get("chart_type"), clean)
     # Show the insight model the MOST RECENT rows (a trend is oldest-first, so the
     # tail holds the current values — the first 30 would be stale early months).
@@ -709,7 +750,7 @@ async def _plot_answer(question: str, db_path: str):
         "Do NOT write any markdown image or link (no ![...](...) and no attachment://) — the "
         f"chart is already displayed above your text.\nChart data (most recent rows last):\n{table}"
     )
-    return (summary, fig.to_json())
+    return (summary, png_b64)
 
 
 _PLOT_TOOL_DESCRIPTION = (
