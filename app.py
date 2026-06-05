@@ -37,6 +37,112 @@ from research_agent import build_agent
 if os.getenv("DATABASE_URL"):
     from chainlit.context import context as _cl_context
     from chainlit.data.chainlit_data_layer import ChainlitDataLayer
+    from chainlit.data.storage_clients.base import BaseStorageClient
+
+    _EL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public", "_el")
+
+    class _LocalElementStorage(BaseStorageClient):
+        """Persist element CONTENT (the Plotly figure JSON) to the Chainlit-served public/
+        dir so charts survive a page RELOAD. Local-dev / fallback only: it's EPHEMERAL on
+        Render (a *deploy* clears the dir, so charts in old threads won't restore after a
+        deploy). Used when Supabase Storage isn't configured."""
+
+        async def upload_file(self, object_key, data, mime="application/octet-stream",
+                              overwrite=True, content_disposition=None):
+            os.makedirs(_EL_DIR, exist_ok=True)
+            name = object_key.replace("/", "__")
+            with open(os.path.join(_EL_DIR, name), "wb") as f:
+                f.write(data if isinstance(data, (bytes, bytearray)) else data.encode("utf-8"))
+            return {"object_key": object_key, "url": f"/public/_el/{name}"}
+
+        async def get_read_url(self, object_key):
+            return f"/public/_el/{object_key.replace('/', '__')}"
+
+        async def delete_file(self, object_key):
+            try:
+                os.remove(os.path.join(_EL_DIR, object_key.replace("/", "__")))
+            except Exception:
+                pass
+            return True
+
+        async def close(self):
+            pass
+
+    class _SupabaseStorageClient(BaseStorageClient):
+        """Persist element CONTENT (chart figure JSON) to a Supabase Storage bucket so charts
+        survive both page RELOAD and DEPLOY (durable, unlike the local dir). Reuses the
+        supabase-py SDK already in requirements — no boto3. Chainlit's built-in S3StorageClient
+        is NOT used because it emits AWS virtual-hosted URLs that don't resolve against Supabase.
+        Returns time-limited SIGNED URLs so the bucket can stay private.
+
+        Configure via env:  SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_STORAGE_BUCKET."""
+
+        _URL_EXPIRY = 60 * 60 * 24 * 7  # 7 days — comfortably outlives any session/reload
+
+        def __init__(self, url, service_key, bucket):
+            from supabase import create_client
+            self._client = create_client(url, service_key)
+            self._bucket = bucket
+
+        def _bkt(self):
+            return self._client.storage.from_(self._bucket)
+
+        async def upload_file(self, object_key, data, mime="application/octet-stream",
+                              overwrite=True, content_disposition=None):
+            payload = data if isinstance(data, (bytes, bytearray)) else data.encode("utf-8")
+
+            def _do():
+                self._bkt().upload(
+                    object_key, bytes(payload),
+                    {"content-type": mime, "upsert": "true" if overwrite else "false"},
+                )
+                signed = self._bkt().create_signed_url(object_key, self._URL_EXPIRY)
+                return signed.get("signedURL") or signed.get("signedUrl") or ""
+
+            try:
+                url = await asyncio.to_thread(_do)
+                return {"object_key": object_key, "url": url}
+            except Exception as exc:
+                _log.warning("Supabase upload_file failed (%s): %r", object_key, exc)
+                return {}
+
+        async def get_read_url(self, object_key):
+            def _do():
+                signed = self._bkt().create_signed_url(object_key, self._URL_EXPIRY)
+                return signed.get("signedURL") or signed.get("signedUrl") or object_key
+            try:
+                return await asyncio.to_thread(_do)
+            except Exception as exc:
+                _log.warning("Supabase get_read_url failed (%s): %r", object_key, exc)
+                return object_key
+
+        async def delete_file(self, object_key):
+            try:
+                await asyncio.to_thread(lambda: self._bkt().remove([object_key]))
+                return True
+            except Exception as exc:
+                _log.warning("Supabase delete_file failed (%s): %r", object_key, exc)
+                return False
+
+        async def close(self):
+            pass
+
+    def _build_storage_client():
+        """Prefer durable Supabase Storage; fall back to the local served dir for dev or
+        if Supabase Storage env isn't set (so charts still persist across a reload locally)."""
+        s_url = os.getenv("SUPABASE_URL")
+        s_key = os.getenv("SUPABASE_SERVICE_KEY")
+        s_bucket = os.getenv("SUPABASE_STORAGE_BUCKET")
+        if s_url and s_key and s_bucket:
+            try:
+                client = _SupabaseStorageClient(s_url, s_key, s_bucket)
+                _log.info("Chart persistence: Supabase Storage bucket %r", s_bucket)
+                return client
+            except Exception as exc:
+                _log.warning("Supabase Storage init failed, using local fallback: %r", exc)
+        else:
+            _log.info("Chart persistence: local dir (Supabase Storage env not set)")
+        return _LocalElementStorage()
 
     class _PatchedDataLayer(ChainlitDataLayer):
         async def create_step(self, step_dict):
@@ -70,7 +176,10 @@ if os.getenv("DATABASE_URL"):
 
     @cl.data_layer
     def _get_data_layer():
-        return _PatchedDataLayer(database_url=os.environ["DATABASE_URL"])
+        # storage_client lets Chainlit persist element content (chart figures) so they
+        # survive a reload/deploy — without it, charts disappear on resume.
+        return _PatchedDataLayer(database_url=os.environ["DATABASE_URL"],
+                                 storage_client=_build_storage_client())
 
 
 _CT_KEYWORDS = {"clinical", "trial", "nct", "study"}
