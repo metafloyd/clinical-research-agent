@@ -37,6 +37,38 @@ from research_agent import build_agent
 if os.getenv("DATABASE_URL"):
     from chainlit.context import context as _cl_context
     from chainlit.data.chainlit_data_layer import ChainlitDataLayer
+    from chainlit.data.storage_clients.base import BaseStorageClient
+
+    _EL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public", "_el")
+
+    class _LocalElementStorage(BaseStorageClient):
+        """Persist element CONTENT (e.g. the Plotly figure JSON) to the Chainlit-served
+        public/ dir, so charts survive a page RELOAD. Chainlit only uploads element content
+        when a storage_client is set; without one the figure isn't stored and the chart
+        vanishes on resume (the bug). No external object store needed — a reload doesn't
+        restart the container, so the file is still there. (Ephemeral on Render: a *deploy*
+        clears these, so charts in OLD threads won't restore after a deploy — acceptable.)"""
+
+        async def upload_file(self, object_key, data, mime="application/octet-stream",
+                              overwrite=True, content_disposition=None):
+            os.makedirs(_EL_DIR, exist_ok=True)
+            name = object_key.replace("/", "__")
+            with open(os.path.join(_EL_DIR, name), "wb") as f:
+                f.write(data if isinstance(data, (bytes, bytearray)) else data.encode("utf-8"))
+            return {"object_key": object_key, "url": f"/public/_el/{name}"}
+
+        async def get_read_url(self, object_key):
+            return f"/public/_el/{object_key.replace('/', '__')}"
+
+        async def delete_file(self, object_key):
+            try:
+                os.remove(os.path.join(_EL_DIR, object_key.replace("/", "__")))
+            except Exception:
+                pass
+            return True
+
+        async def close(self):
+            pass
 
     class _PatchedDataLayer(ChainlitDataLayer):
         async def create_step(self, step_dict):
@@ -70,7 +102,10 @@ if os.getenv("DATABASE_URL"):
 
     @cl.data_layer
     def _get_data_layer():
-        return _PatchedDataLayer(database_url=os.environ["DATABASE_URL"])
+        # storage_client lets Chainlit persist element content (chart figures) so they
+        # survive a reload — without it, charts disappear on resume.
+        return _PatchedDataLayer(database_url=os.environ["DATABASE_URL"],
+                                 storage_client=_LocalElementStorage())
 
 
 _CT_KEYWORDS = {"clinical", "trial", "nct", "study"}

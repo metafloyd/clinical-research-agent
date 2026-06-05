@@ -34,3 +34,6 @@ Thumbs.db
 # Stress-test run artifacts
 stress_results.txt
 stress_run.log
+
+# Persisted chart element files (runtime, ephemeral)
+public/_el/
