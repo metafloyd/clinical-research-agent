@@ -34,3 +34,5 @@ Thumbs.db
 # Stress-test run artifacts
 stress_results.txt
 stress_run.log
+stress_clarify_results.txt
+stress_clarify.log
