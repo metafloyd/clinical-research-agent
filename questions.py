@@ -1,41 +1,44 @@
 """
-Suggested search pool — concise questions shown 4 at a time on the welcome screen.
+Suggested search pool — concise starters shown 4 at a time on the welcome screen.
 
-Kept short (one line each) so the starter cards stay compact and the welcome
-layout doesn't dominate the screen. Covers the full tool spectrum across both
-data sources, for investigators, research coordinators, and clinicians.
+One line each, easy to scan. Weighted toward the differentiators (our internal
+trial-operations data + on-demand charts) alongside the public sources.
 
 Badge key:
-  "🏥"        → ClinicalTrials.gov tools only
-  "📚"        → PubMed tools only
-  "🏥 + 📚"  → Combined query across both sources
+  "🔍"        → Our internal trial-operations data (CTMS)
+  "📊"        → Chart / visualization of our data
+  "🏥"        → ClinicalTrials.gov (public registry)
+  "📚"        → PubMed / published literature
+  "🏥 + 📚"  → Public trials + literature together
+  "🔍 + 🏥"  → Our data vs. the public landscape
 """
 
 QUESTION_POOL = [
-    # ── Eligibility matching ──────────────────────────────────────────────────
-    ("🏥", "Recruiting trials for a 65-year-old with treatment-resistant hypertension?"),
-    ("🏥", "Trials for a 52-year-old with early-stage ovarian cancer and a BRCA1 mutation?"),
-    ("🏥", "Trials for relapsed multiple myeloma after two prior lines of therapy?"),
+    # ── Our portfolio (internal CTMS) ─────────────────────────────────────────
+    ("🔍", "How is enrollment tracking across our trials?"),
+    ("🔍", "Which of our sites is furthest behind target?"),
+    ("🔍", "Which of our studies has the worst enrollment?"),
+    ("🔍", "What is Dr. Raj Patel researching?"),
 
-    # ── Landscape and counts ──────────────────────────────────────────────────
-    ("🏥", "How many Phase 2–3 pancreatic cancer trials are recruiting in the US?"),
-    ("🏥", "Which sponsors are most active in Alzheimer's trials, and in what phases?"),
-    ("🏥", "What phases and regions dominate CRISPR gene-therapy trials globally?"),
+    # ── Charts of our data ────────────────────────────────────────────────────
+    ("📊", "Chart our enrollment by site"),
+    ("📊", "Show our enrollment trend over time"),
+    ("📊", "Visualize our portfolio by therapeutic area"),
+    ("📊", "Show our recruitment funnel"),
 
-    # ── Completed trial results ───────────────────────────────────────────────
-    ("🏥", "What did completed Phase 3 semaglutide cardiovascular trials report?"),
-    ("🏥 + 📚", "Completed CAR-T trials for DLBCL — results and long-term outcomes?"),
+    # ── Our data vs. the world (cross-source) ─────────────────────────────────
+    ("🔍 + 🏥", "How does our donanemab trial compare to the field?"),
 
-    # ── Literature depth ──────────────────────────────────────────────────────
-    ("📚", "Papers related to the landmark CAR-T results in paediatric ALL?"),
-    ("📚", "APA citations for the top papers on GLP-1 agonists and CV outcomes."),
-    ("📚", "MeSH classification for HFpEF and related search terms?"),
+    # ── Public trial registry (ClinicalTrials.gov) ────────────────────────────
+    ("🏥", "Recruiting Phase 3 trials for pancreatic cancer?"),
+    ("🏥", "Which sponsors lead Alzheimer's trial activity?"),
+    ("🏥", "Trials for a 52-year-old with BRCA1 ovarian cancer?"),
 
-    # ── Combined trials + literature ──────────────────────────────────────────
-    ("🏥 + 📚", "KRAS-targeted therapy in pancreatic cancer — trials, evidence, and gaps?"),
-    ("🏥 + 📚", "Semaglutide for Type 2 Diabetes — active trials and published evidence?"),
-    ("🏥 + 📚", "CAR-T in paediatric ALL — eligibility, safety, and recent literature."),
-    ("🏥 + 📚", "HFpEF — active trials and what completed studies reported?"),
-    ("🏥 + 📚", "SGLT2 inhibitors in heart failure — trial landscape and outcomes."),
-    ("🏥 + 📚", "Checkpoint inhibitors in NSCLC — leading sponsors and the evidence?"),
+    # ── Published literature (PubMed) ─────────────────────────────────────────
+    ("📚", "Latest evidence on semaglutide and CV outcomes?"),
+    ("📚", "What's the MeSH classification for HFpEF?"),
+
+    # ── Trials + literature together ──────────────────────────────────────────
+    ("🏥 + 📚", "CAR-T in DLBCL — trials and long-term outcomes?"),
+    ("🏥 + 📚", "Checkpoint inhibitors in NSCLC — sponsors and evidence?"),
 ]
