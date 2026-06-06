@@ -631,6 +631,17 @@ label columns (site_name, title) for axes, not internal_id/site_id.
 age/sex/race, p-values, outcomes/results, safety/adverse events — reply with EXACTLY \
 {{"chart_type": "none"}} and nothing else. NEVER substitute a different column (never chart \
 enrollment or targets AS "budget").**
+- **Vague METRIC ("chart our performance / success / progress / how we're doing") — the \
+metric is undefined, but DON'T pick a random one and DON'T decline. ALWAYS default to the \
+single most useful operational view: a "bar" of current enrolled vs target by study \
+(enrollment_current, x = title, y = ["enrolled","target"]), and SET "note" to state the \
+assumption, e.g. "'Performance' can mean a few things — showing current enrollment vs target \
+by study; ask for fill rate, completion, or a trend if you meant something else." Use this \
+SAME default for all such vague-metric requests so the behavior is consistent.**
+- **Vague SCOPE ("chart everything / all our data / a visual overview") — don't decline. \
+Default to a "donut" portfolio breakdown by therapeutic area (the most legible one-glance \
+overview) and SET "note", e.g. "Showing our portfolio by therapeutic area as a starting \
+overview — ask for enrollment, phase, or a trend to go deeper."**
 Reply with ONLY the JSON object."""
 
 
