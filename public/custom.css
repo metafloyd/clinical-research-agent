@@ -126,22 +126,21 @@ textarea::placeholder {
 
 /* ── Header button tooltips (Radix) — make the label readable ───────────── */
 /* The "New Chat" / "Open sidebar" tooltips render in a body-level Radix portal
-   ([data-radix-popper-content-wrapper]). They have correct text, but appeared as
-   empty boxes because the popover inherited near-white text. Style them as a normal
-   dark tooltip so the label is visible. */
-[data-radix-popper-content-wrapper] [role="tooltip"],
-[data-radix-popper-content-wrapper] [data-slot="tooltip-content"] {
-    background: #0E3293 !important;
-    color: #F9FAFB !important;
-    fill: #0E3293 !important;            /* the little arrow */
-    font-size: 12px !important;
-    font-weight: 500 !important;
-    padding: 5px 9px !important;
-    border-radius: 6px !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.18) !important;
+   ([data-radix-popper-content-wrapper]). In our forced-light theme the box is WHITE
+   (`--popover`), but the label rendered near-white (empty-looking box) — the
+   `--popover-foreground` text colour was being overridden light. Force the popover
+   text vars + colour to dark INSIDE the portal so any popover text (tooltip, and
+   harmlessly the account dropdown) is readable on its white background. Belt-and-
+   suspenders: set the vars AND an explicit colour, covering whichever path wins. */
+[data-radix-popper-content-wrapper] {
+    --popover-foreground: 222 47% 11% !important;
+    --foreground: 222 47% 11% !important;
+    --muted-foreground: 215 16% 40% !important;
 }
-[data-radix-popper-content-wrapper] [role="tooltip"] * {
-    color: #F9FAFB !important;
+[data-radix-popper-content-wrapper],
+[data-radix-popper-content-wrapper] * {
+    color: #111827 !important;
+    fill: #111827 !important;
 }
 
 /* ── Thread-history sidebar — themed to the app (shadcn Sidebar) ─────────── */
