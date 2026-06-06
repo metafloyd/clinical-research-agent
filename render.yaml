@@ -15,14 +15,12 @@ services:
         sync: false
       - key: SUPABASE_URL
         sync: false
-      # db.py reads SUPABASE_SERVICE_ROLE_KEY; the chart-storage client (app.py) reads
-      # SUPABASE_SERVICE_KEY. Both are service-role credentials for the same project —
-      # kept as separate names to match the code; could be unified to one later.
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
-      # Supabase Storage — persists interactive chart figures (survive reload + deploy)
+      # Single service-role credential for BOTH Postgres (db.py) and Storage (app.py).
+      # (db.py still falls back to the legacy SUPABASE_SERVICE_ROLE_KEY if this is unset,
+      # so the rename is safe — remove that fallback once the dashboard is migrated.)
       - key: SUPABASE_SERVICE_KEY
         sync: false
+      # Supabase Storage — persists interactive chart figures (survive reload + deploy)
       - key: SUPABASE_STORAGE_BUCKET
         sync: false
       # Google OAuth (Authlib) — login, gated by BETA_WHITELIST
