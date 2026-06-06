@@ -105,17 +105,28 @@
         return h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
     }
 
+    // The /user endpoint never changes within a session, so fetch it ONCE and cache
+    // the promise. Without this, the body MutationObserver below (which fires on every
+    // DOM node Plotly/streaming adds — thousands when charts render) would re-hit /user
+    // repeatedly, producing a multi-minute request storm that makes reloads feel stuck.
+    var _userPromise = null;
+    function _getUser() {
+        if (!_userPromise) {
+            _userPromise = fetch('/user', { credentials: 'include' })
+                .then(function(r) { return r.ok ? r.json() : null; })
+                .catch(function() { return null; });
+        }
+        return _userPromise;
+    }
+
     function fetchAndUpdateGreeting(el) {
-        fetch('/user', { credentials: 'include' })
-            .then(function(r) { return r.ok ? r.json() : null; })
-            .then(function(data) {
-                if (!data) return;
-                var meta = data.metadata || {};
-                var name = meta.given_name || meta.name || _nameFromEmail(data.identifier || data.email || '');
-                if (!name) return;
-                el.textContent = 'Good ' + _timePeriod() + ', ' + name + '.';
-            })
-            .catch(function() {});
+        _getUser().then(function(data) {
+            if (!data) return;
+            var meta = data.metadata || {};
+            var name = meta.given_name || meta.name || _nameFromEmail(data.identifier || data.email || '');
+            if (!name) return;
+            el.textContent = 'Good ' + _timePeriod() + ', ' + name + '.';
+        });
     }
 
     function injectGreeting() {
@@ -192,19 +203,16 @@
     // circle and renders the name via ::after from this CSS variable.
     function applyUserName() {
         if (document.documentElement.style.getPropertyValue('--cl-username')) return;
-        fetch('/user', { credentials: 'include' })
-            .then(function(r) { return r.ok ? r.json() : null; })
-            .then(function(data) {
-                if (!data) return;
-                var meta = data.metadata || {};
-                var name = meta.given_name || meta.name || data.identifier || 'Account';
-                document.documentElement.style.setProperty('--cl-username', JSON.stringify(name));
-                // Google profile photo → shown as a round avatar before the name (CSS ::before).
-                if (meta.picture) {
-                    document.documentElement.style.setProperty('--cl-userpic', 'url("' + meta.picture + '")');
-                }
-            })
-            .catch(function() {});
+        _getUser().then(function(data) {
+            if (!data) return;
+            var meta = data.metadata || {};
+            var name = meta.given_name || meta.name || data.identifier || 'Account';
+            document.documentElement.style.setProperty('--cl-username', JSON.stringify(name));
+            // Google profile photo → shown as a round avatar before the name (CSS ::before).
+            if (meta.picture) {
+                document.documentElement.style.setProperty('--cl-userpic', 'url("' + meta.picture + '")');
+            }
+        });
     }
     applyUserName();
     setTimeout(applyUserName, 800);
@@ -220,8 +228,15 @@
     }
     wireAudio();
 
+    // Run the per-mutation work, but check the streaming→done transition on EVERY
+    // mutation (it's cheap and timing-sensitive for the done sound).
     var _wasStreaming = false;
-    new MutationObserver(function () {
+    function _checkStreamDone() {
+        var streaming = !!document.getElementById('stop-button');
+        if (_wasStreaming && !streaming) { setTimeout(playDone, 300); }
+        _wasStreaming = streaming;
+    }
+    function _applyChrome() {
         syncThreadView();   // keep in sync across new-chat / thread navigation
         injectGreeting();
         injectDataSourceBadge();
@@ -229,8 +244,17 @@
         forceLightTheme();
         setPlaceholder();
         wireAudio();
-        var streaming = !!document.getElementById('stop-button');
-        if (_wasStreaming && !streaming) { setTimeout(playDone, 300); }
-        _wasStreaming = streaming;
+    }
+    // DEBOUNCE the expensive DOM work. Plotly/streaming add thousands of nodes; firing
+    // _applyChrome (which queries the DOM + can fetch /user) per node pegs the main thread
+    // for minutes on a chart-heavy reload. Coalesce to one run ~150ms after mutations settle.
+    var _chromeTimer = null;
+    new MutationObserver(function () {
+        _checkStreamDone();                 // cheap, every time (done-sound timing)
+        if (_chromeTimer) return;
+        _chromeTimer = setTimeout(function () {
+            _chromeTimer = null;
+            _applyChrome();
+        }, 150);
     }).observe(document.body, { childList: true, subtree: true });
 })();
