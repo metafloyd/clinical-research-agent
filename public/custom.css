@@ -124,21 +124,11 @@ textarea::placeholder {
 }
 #cl-datasource-badge .cl-dot { opacity: 0.5; }
 
-/* ── Header button tooltips (Radix) — make the label readable ───────────── */
-/* PRIMARY fix is in custom.js (styleShadowTooltips): Chainlit portals tooltips into a
-   SHADOW ROOT (window.cl_shadowRootElement), which external CSS can't cross — so the
-   "New Chat"/"Open sidebar" tooltips read white-on-white. This CSS is a FALLBACK for any
-   build where the tooltip is in the light DOM instead: same navy box + light text. */
-[role="tooltip"] {
-    background: #0E3293 !important;
-    color: #F9FAFB !important;
-    border-color: #0E3293 !important;
-    font-size: 12px !important;
-    font-weight: 500 !important;
-    padding: 5px 9px !important;
-    border-radius: 6px !important;
-}
-[role="tooltip"] * { color: #F9FAFB !important; }
+/* ── Header button tooltips (Radix) — HIDDEN ────────────────────────────── */
+/* The "New Chat"/"Open sidebar" tooltips rendered as unreadable white-on-white and the
+   colour proved un-overridable. The icons are self-explanatory, so the tooltips are
+   removed (custom.js also hides them inline as the primary guard). */
+[role="tooltip"] { display: none !important; }
 
 /* ── Thread-history sidebar — themed to the app (shadcn Sidebar) ─────────── */
 /* Stable hooks confirmed in the built frontend: the sidebar shell is

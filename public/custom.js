@@ -236,28 +236,19 @@
         if (_wasStreaming && !streaming) { setTimeout(playDone, 300); }
         _wasStreaming = streaming;
     }
-    // The header-button tooltips ("New Chat" / "Open sidebar") rendered as near-white text
-    // on a white box (empty-looking), and external CSS couldn't override it (the colour is
-    // set with higher priority than any stylesheet rule). Fix by setting the colours as
-    // INLINE styles directly on each tooltip element the instant it appears — inline
-    // !important beats every stylesheet/class and works regardless of shadow DOM. We style
-    // the tooltip AND its descendants (the text may be in a child span).
-    function _paintTip(t) {
-        if (!t || t._clTipPainted) return;
-        t._clTipPainted = true;
-        var box = t.style;
-        box.setProperty('background-color', '#0E3293', 'important');
-        box.setProperty('color', '#F9FAFB', 'important');
-        box.setProperty('border-color', '#0E3293', 'important');
-        box.setProperty('font-weight', '500', 'important');
-        var kids = t.querySelectorAll ? t.querySelectorAll('*') : [];
-        for (var i = 0; i < kids.length; i++) {
-            kids[i].style.setProperty('color', '#F9FAFB', 'important');
-        }
-    }
+    // The header-button tooltips ("New Chat" / "Open sidebar") rendered as unreadable
+    // white-on-white and their colour couldn't be overridden by CSS or JS inline styles.
+    // The icons are self-explanatory, so just HIDE the tooltip outright — inline
+    // display:none !important can't be overridden. Hide the [role=tooltip] box and its
+    // Radix popper wrapper so no empty box flashes.
     function paintTooltips() {
         var tips = document.querySelectorAll('[role="tooltip"]');
-        for (var i = 0; i < tips.length; i++) _paintTip(tips[i]);
+        for (var i = 0; i < tips.length; i++) {
+            var t = tips[i];
+            t.style.setProperty('display', 'none', 'important');
+            var wrap = t.closest && t.closest('[data-radix-popper-content-wrapper]');
+            if (wrap) wrap.style.setProperty('display', 'none', 'important');
+        }
     }
 
     function _applyChrome() {
