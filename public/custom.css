@@ -124,6 +124,26 @@ textarea::placeholder {
 }
 #cl-datasource-badge .cl-dot { opacity: 0.5; }
 
+/* ── Header button tooltips (Radix) — make the label readable ───────────── */
+/* The "New Chat" / "Open sidebar" tooltips render in a body-level Radix portal
+   ([data-radix-popper-content-wrapper]). They have correct text, but appeared as
+   empty boxes because the popover inherited near-white text. Style them as a normal
+   dark tooltip so the label is visible. */
+[data-radix-popper-content-wrapper] [role="tooltip"],
+[data-radix-popper-content-wrapper] [data-slot="tooltip-content"] {
+    background: #0E3293 !important;
+    color: #F9FAFB !important;
+    fill: #0E3293 !important;            /* the little arrow */
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    padding: 5px 9px !important;
+    border-radius: 6px !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18) !important;
+}
+[data-radix-popper-content-wrapper] [role="tooltip"] * {
+    color: #F9FAFB !important;
+}
+
 /* ── Thread-history sidebar — themed to the app (shadcn Sidebar) ─────────── */
 /* Stable hooks confirmed in the built frontend: the sidebar shell is
    [data-sidebar="sidebar"], the thread list lives under #thread-history, each
