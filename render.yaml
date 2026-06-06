@@ -16,8 +16,6 @@ services:
       - key: SUPABASE_URL
         sync: false
       # Single service-role credential for BOTH Postgres (db.py) and Storage (app.py).
-      # (db.py still falls back to the legacy SUPABASE_SERVICE_ROLE_KEY if this is unset,
-      # so the rename is safe — remove that fallback once the dashboard is migrated.)
       - key: SUPABASE_SERVICE_KEY
         sync: false
       # Supabase Storage — persists interactive chart figures (survive reload + deploy)

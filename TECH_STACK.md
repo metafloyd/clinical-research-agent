@@ -142,9 +142,8 @@ Supabase provides **two** distinct services to this app:
 **Storage env vars:** `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_STORAGE_BUCKET=elements`.
 (All declared in `render.yaml`; values set in the Render dashboard.)
 
-> **Two Supabase key names, by design:** `db.py` (analytics) reads `SUPABASE_SERVICE_ROLE_KEY`;
-> the chart-storage client (`app.py`) reads `SUPABASE_SERVICE_KEY`. Both are service-role
-> credentials for the same project — separate names match the code today; could be unified later.
+> **One service-role key, app-wide:** a single `SUPABASE_SERVICE_KEY` is used for BOTH
+> Postgres (`db.py`) and Storage (`app.py`) — verified to work for both paths.
 
 ---
 

@@ -101,12 +101,15 @@ pip install -r requirements.txt
 
 ```
 OPENAI_API_KEY
+DATABASE_URL
 SUPABASE_URL
-SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_SERVICE_KEY            # one service-role key for Postgres + Storage
+SUPABASE_STORAGE_BUCKET         # bucket for persisted chart figures (e.g. "elements")
 OAUTH_GOOGLE_CLIENT_ID
 OAUTH_GOOGLE_CLIENT_SECRET
 CHAINLIT_AUTH_SECRET
 CHAINLIT_URL=https://clinical-research-agent.onrender.com
+# optional: LANGSMITH_TRACING, LANGSMITH_API_KEY, LANGSMITH_PROJECT
 ```
 
 > Google OAuth redirect URIs must include both the local callback

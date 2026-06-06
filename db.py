@@ -18,9 +18,7 @@ from supabase import create_client, Client
 @lru_cache(maxsize=1)
 def _get_client() -> Client:
     url: str = os.environ["SUPABASE_URL"]
-    # Canonical name is SUPABASE_SERVICE_KEY (used app-wide); fall back to the legacy
-    # SUPABASE_SERVICE_ROLE_KEY so the app keeps booting during/after the rename.
-    key: str = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+    key: str = os.environ["SUPABASE_SERVICE_KEY"]
     return create_client(url, key)
 
 
