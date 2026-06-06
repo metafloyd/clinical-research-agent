@@ -594,7 +594,13 @@ database into ONE chart. Reply with ONLY a JSON object (no prose, no fences) wit
 for grouped bars; the ordered stage columns for a funnel),
   "color": (optional) a result column to split series by (e.g. the study name for a \
 multi-line trend), else null,
-  "title": a short, human chart title.
+  "title": a short, human chart title,
+  "note": (optional) a short, friendly one-line clause to show the user ONLY when you had \
+to deviate from a literal reading of their request — e.g. you kept the chart type they named \
+but couldn't apply it the way they implied, or you picked a sensible default for a vague \
+request. State WHAT you did and offer how to narrow. Omit it (null) when the chart is a \
+straightforward match. Example: "A funnel shows one screening pipeline across all studies, \
+so it can't split by area — here's our overall funnel; ask for a specific area to filter it."
 
 {SCHEMA_DESCRIPTION}
 
@@ -609,10 +615,12 @@ region" → "donut", x = the category column, y = "n" where SQL selects COUNT(*)
 - "funnel / screening / screen-to-enroll" → "funnel", y = ["screened","enrolled",\
 "randomized","completed"] summed from enrollment_current. A funnel is ONE aggregate \
 row of those ordered stage totals — NO GROUP BY a category. If the user asks for a \
-funnel "by area / by site / by phase" (a per-category breakdown a funnel can't show), \
-do NOT emit a GROUP BY funnel; either pick the single overall funnel (filtered to that \
-subset if they named one) or, if no single subset is implied, use "bar" with the stage \
-totals. NEVER select stage SUMs with a GROUP BY whose category column isn't in SELECT.
+funnel "by area / by site / by phase" (a per-category split a funnel CANNOT show): KEEP \
+the funnel chart type they asked for (do NOT silently swap to a donut/bar breakdown). If \
+they named a specific subset (one area/site), filter the funnel to it. If no single subset \
+is implied, render the OVERALL funnel across all studies and SET "note" to explain that a \
+funnel is one pipeline that can't split by that category, and how to narrow. NEVER select \
+stage SUMs with a GROUP BY whose category column isn't in SELECT.
 - CURRENT values → enrollment_current; trends → raw enrollment. Always select friendly \
 label columns (site_name, title) for axes, not internal_id/site_id.
 - Match a study by a drug/condition phrase using its SIGNIFICANT TERMS SEPARATELY — \
@@ -702,7 +710,16 @@ async def _plot_answer(question: str, db_path: str):
     # Show the insight model the MOST RECENT rows (a trend is oldest-first, so the
     # tail holds the current values — the first 30 would be stale early months).
     table = _format_rows(cols, rows[-30:])
+    # "assume-and-state": if the spec deviated from a literal reading of the request,
+    # the model set a `note` — surface it FIRST so the user knows what we did and why.
+    note = (spec.get("note") or "").strip()
+    note_line = (
+        f'IMPORTANT — the chart deviates from a literal reading of the request, so START your '
+        f'reply with this clause, rephrased naturally, BEFORE the insight: "{note}". Then add '
+        f'the insight sentence.\n' if note else ""
+    )
     summary = (
+        note_line +
         f"A {spec.get('chart_type', 'bar')} chart titled \"{spec.get('title', '')}\" has "
         "been rendered for the user from OUR internal trial-operations data. Add ONE short "
         "sentence of insight using ONLY the exact category labels and numbers in the data "
