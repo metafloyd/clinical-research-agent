@@ -607,7 +607,12 @@ if comparing multiple studies.
 - "breakdown / distribution / mix / by therapeutic area / by phase / by sponsor / by \
 region" → "donut", x = the category column, y = "n" where SQL selects COUNT(*) AS n.
 - "funnel / screening / screen-to-enroll" → "funnel", y = ["screened","enrolled",\
-"randomized","completed"] summed from enrollment_current.
+"randomized","completed"] summed from enrollment_current. A funnel is ONE aggregate \
+row of those ordered stage totals — NO GROUP BY a category. If the user asks for a \
+funnel "by area / by site / by phase" (a per-category breakdown a funnel can't show), \
+do NOT emit a GROUP BY funnel; either pick the single overall funnel (filtered to that \
+subset if they named one) or, if no single subset is implied, use "bar" with the stage \
+totals. NEVER select stage SUMs with a GROUP BY whose category column isn't in SELECT.
 - CURRENT values → enrollment_current; trends → raw enrollment. Always select friendly \
 label columns (site_name, title) for axes, not internal_id/site_id.
 - Match a study by a drug/condition phrase using its SIGNIFICANT TERMS SEPARATELY — \
