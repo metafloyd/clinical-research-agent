@@ -73,19 +73,31 @@ if os.getenv("DATABASE_URL"):
         survive both page RELOAD and DEPLOY (durable, unlike the local dir). Reuses the
         supabase-py SDK already in requirements — no boto3. Chainlit's built-in S3StorageClient
         is NOT used because it emits AWS virtual-hosted URLs that don't resolve against Supabase.
-        Returns time-limited SIGNED URLs so the bucket can stay private.
+
+        Reads use STATIC PUBLIC URLs (no signing, no network call) — Chainlit regenerates a read
+        URL per chart element on EVERY thread reload (twice, via two get_thread calls), so a signed
+        URL there meant 2N Supabase round-trips per reload and slow, chart-count-dependent reloads.
+        A public URL is pure string construction → reloads are fast and constant-time. Requires the
+        bucket to be PUBLIC in Supabase. Trade-off: chart figure JSON is publicly readable at its
+        (unguessable UUID) URL — acceptable for synthetic demo CTMS data only.
 
         Configure via env:  SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_STORAGE_BUCKET."""
-
-        _URL_EXPIRY = 60 * 60 * 24 * 7  # 7 days — comfortably outlives any session/reload
 
         def __init__(self, url, service_key, bucket):
             from supabase import create_client
             self._client = create_client(url, service_key)
             self._bucket = bucket
+            self._url_cache = {}   # object_key -> public_url (no-network; cheap insurance)
 
         def _bkt(self):
             return self._client.storage.from_(self._bucket)
+
+        def _public_url(self, object_key):
+            url = self._url_cache.get(object_key)
+            if url is None:
+                url = self._bkt().get_public_url(object_key)   # pure string build, no I/O
+                self._url_cache[object_key] = url
+            return url
 
         async def upload_file(self, object_key, data, mime="application/octet-stream",
                               overwrite=True, content_disposition=None):
@@ -96,22 +108,19 @@ if os.getenv("DATABASE_URL"):
                     object_key, bytes(payload),
                     {"content-type": mime, "upsert": "true" if overwrite else "false"},
                 )
-                signed = self._bkt().create_signed_url(object_key, self._URL_EXPIRY)
-                return signed.get("signedURL") or signed.get("signedUrl") or ""
 
             try:
-                url = await asyncio.to_thread(_do)
-                return {"object_key": object_key, "url": url}
+                await asyncio.to_thread(_do)
+                return {"object_key": object_key, "url": self._public_url(object_key)}
             except Exception as exc:
                 _log.warning("Supabase upload_file failed (%s): %r", object_key, exc)
                 return {}
 
         async def get_read_url(self, object_key):
-            def _do():
-                signed = self._bkt().create_signed_url(object_key, self._URL_EXPIRY)
-                return signed.get("signedURL") or signed.get("signedUrl") or object_key
+            # Public URL = no signing, no network round-trip → fast reloads regardless of
+            # chart count. (See class docstring for the why + the privacy trade-off.)
             try:
-                return await asyncio.to_thread(_do)
+                return self._public_url(object_key)
             except Exception as exc:
                 _log.warning("Supabase get_read_url failed (%s): %r", object_key, exc)
                 return object_key

@@ -132,12 +132,20 @@ Supabase provides **two** distinct services to this app:
 | Service | Library | What it stores | How it connects |
 |---|---|---|---|
 | **Postgres (chat history + analytics)** | `supabase` (`>=2.4.0`), `asyncpg` (`>=0.29.0`) | Chainlit threads/steps (so reloading a chat restores it) + our own `users`/`chat_sessions`/`messages` analytics tables (`db.py`) | Chainlit's native data layer, subclassed as `_PatchedDataLayer` in `app.py` (fixes a threadId backfill bug + caps the sidebar to 5 chats). Connection string = `DATABASE_URL`. `db.py` uses the Supabase client for the analytics tables. |
-| **Storage (chart figures)** | `supabase` SDK (Storage API) | Plotly figure JSON for each chart, so charts survive **reload AND deploy** | Custom `_SupabaseStorageClient` (`app.py`) — uploads element content to the `elements` bucket, returns time-limited **signed URLs** (private bucket). Chainlit only persists element content when a `storage_client` is set. |
+| **Storage (chart figures)** | `supabase` SDK (Storage API) | Plotly figure JSON for each chart, so charts survive **reload AND deploy** | Custom `_SupabaseStorageClient` (`app.py`) — uploads element content to the **public** `elements` bucket, returns **static public URLs** (no signing). Chainlit only persists element content when a `storage_client` is set. |
 
 > **Why a custom storage client?** Chainlit's built-in `S3StorageClient` emits AWS
 > virtual-hosted URLs that don't resolve against Supabase Storage (would 404 on reload).
-> The custom client uses the Supabase SDK directly + signed URLs. Falls back to a local
-> served dir (`_LocalElementStorage`) for dev when the Supabase Storage env vars are absent.
+> The custom client uses the Supabase SDK directly. Falls back to a local served dir
+> (`_LocalElementStorage`) for dev when the Supabase Storage env vars are absent.
+
+> **Public URLs (reload performance).** Chainlit regenerates a read URL for every chart
+> element on EVERY thread reload — and it loads the thread twice per resume — so a *signed*
+> URL there meant `2 × (chart count)` Supabase round-trips per reload → slow, chart-count-
+> dependent reloads. The client returns **static public URLs** instead (pure string build,
+> no network) → reloads are fast and constant-time. **Requires the `elements` bucket to be
+> PUBLIC.** Trade-off: a chart's figure JSON is publicly readable at its (unguessable UUID)
+> URL — fine for synthetic demo CTMS data; do not store anything sensitive in this bucket.
 
 **Storage env vars:** `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_STORAGE_BUCKET=elements`.
 (All declared in `render.yaml`; values set in the Render dashboard.)
