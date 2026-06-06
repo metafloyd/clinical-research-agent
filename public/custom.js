@@ -236,25 +236,28 @@
         if (_wasStreaming && !streaming) { setTimeout(playDone, 300); }
         _wasStreaming = streaming;
     }
-    // Chainlit portals tooltips/popovers into a SHADOW ROOT (window.cl_shadowRootElement).
-    // External CSS (custom.css) can't cross the shadow boundary, so the header-button
-    // tooltips ("New Chat" / "Open sidebar") rendered as near-white text on a white box
-    // (empty-looking). Inject a <style> INTO the shadow root (styles there DO apply to its
-    // content) to give the tooltip a dark box + light, readable text. Runs once.
-    function styleShadowTooltips() {
-        var root = window.cl_shadowRootElement;
-        if (!root || typeof root.appendChild !== 'function') return;
-        if (root.getElementById && root.getElementById('cl-tip-style')) return;
-        if (root.querySelector && root.querySelector('#cl-tip-style')) return;
-        var st = document.createElement('style');
-        st.id = 'cl-tip-style';
-        st.textContent =
-            '[role="tooltip"]{' +
-            'background:#0E3293!important;color:#F9FAFB!important;' +
-            'border-color:#0E3293!important;font-size:12px!important;' +
-            'font-weight:500!important;padding:5px 9px!important;border-radius:6px!important;}' +
-            '[role="tooltip"] *{color:#F9FAFB!important;}';
-        root.appendChild(st);
+    // The header-button tooltips ("New Chat" / "Open sidebar") rendered as near-white text
+    // on a white box (empty-looking), and external CSS couldn't override it (the colour is
+    // set with higher priority than any stylesheet rule). Fix by setting the colours as
+    // INLINE styles directly on each tooltip element the instant it appears — inline
+    // !important beats every stylesheet/class and works regardless of shadow DOM. We style
+    // the tooltip AND its descendants (the text may be in a child span).
+    function _paintTip(t) {
+        if (!t || t._clTipPainted) return;
+        t._clTipPainted = true;
+        var box = t.style;
+        box.setProperty('background-color', '#0E3293', 'important');
+        box.setProperty('color', '#F9FAFB', 'important');
+        box.setProperty('border-color', '#0E3293', 'important');
+        box.setProperty('font-weight', '500', 'important');
+        var kids = t.querySelectorAll ? t.querySelectorAll('*') : [];
+        for (var i = 0; i < kids.length; i++) {
+            kids[i].style.setProperty('color', '#F9FAFB', 'important');
+        }
+    }
+    function paintTooltips() {
+        var tips = document.querySelectorAll('[role="tooltip"]');
+        for (var i = 0; i < tips.length; i++) _paintTip(tips[i]);
     }
 
     function _applyChrome() {
@@ -265,14 +268,18 @@
         forceLightTheme();
         setPlaceholder();
         wireAudio();
-        styleShadowTooltips();
+        paintTooltips();
     }
     // DEBOUNCE the expensive DOM work. Plotly/streaming add thousands of nodes; firing
     // _applyChrome (which queries the DOM + can fetch /user) per node pegs the main thread
     // for minutes on a chart-heavy reload. Coalesce to one run ~150ms after mutations settle.
+    // Tooltips appear on hover and must be painted INSTANTLY (not on the 150ms debounce),
+    // so paintTooltips() runs every mutation — it's cheap (querySelectorAll on a near-empty
+    // selector + a one-time per-element guard).
     var _chromeTimer = null;
     new MutationObserver(function () {
         _checkStreamDone();                 // cheap, every time (done-sound timing)
+        paintTooltips();                    // cheap, every time (tooltip appears on hover)
         if (_chromeTimer) return;
         _chromeTimer = setTimeout(function () {
             _chromeTimer = null;
