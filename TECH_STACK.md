@@ -66,9 +66,9 @@ here, and how the pieces connect. Grounded in the actual code (`requirements.txt
 > **Provider:** OpenAI API (`OPENAI_API_KEY`). Both models are OpenAI; the only reason
 > there are two is capability-vs-cost tuning. `MAIN_MAX_TOKENS=2048`, `NLSQL_MAX_TOKENS=256`.
 
-> Note: `GROQ_API_KEY` still appears in `render.yaml`/`.env` from an earlier Groq
-> experiment — **not used** in the current code path (we moved off Groq; its per-request
-> token cap was too tight for tool-heavy turns).
+> Note: an earlier Groq experiment was removed from the deploy config — we moved off Groq
+> (its per-request token cap was too tight for tool-heavy turns). A stale `GROQ_API_KEY` may
+> still linger in a local `.env`; it is unused by the current code path.
 
 ---
 
@@ -140,8 +140,11 @@ Supabase provides **two** distinct services to this app:
 > served dir (`_LocalElementStorage`) for dev when the Supabase Storage env vars are absent.
 
 **Storage env vars:** `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_STORAGE_BUCKET=elements`.
-⚠️ These are set in the Render dashboard but **not yet listed in `render.yaml`** (the yaml
-predates the chart-persistence work) — worth adding for reproducibility.
+(All declared in `render.yaml`; values set in the Render dashboard.)
+
+> **Two Supabase key names, by design:** `db.py` (analytics) reads `SUPABASE_SERVICE_ROLE_KEY`;
+> the chart-storage client (`app.py`) reads `SUPABASE_SERVICE_KEY`. Both are service-role
+> credentials for the same project — separate names match the code today; could be unified later.
 
 ---
 

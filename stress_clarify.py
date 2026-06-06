@@ -15,7 +15,6 @@ Run in the background.
 """
 
 import asyncio
-import json
 from langchain_core.messages import AIMessage, HumanMessage
 import trial_ops as t
 from config import TRIAL_OPS_DB_PATH

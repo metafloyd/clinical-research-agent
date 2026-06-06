@@ -4,20 +4,41 @@ services:
     runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: bash start.sh
+    # All secrets use `sync: false` — values are set in the Render dashboard,
+    # not committed. This block only DECLARES which env vars the service needs.
     envVars:
-      - key: GROQ_API_KEY
+      # OpenAI — the only LLM provider (gpt-4o-mini main agent + gpt-4o NL→SQL/chart-spec)
+      - key: OPENAI_API_KEY
+        sync: false
+      # Supabase Postgres — chat history (Chainlit data layer) + analytics tables (db.py)
+      - key: DATABASE_URL
         sync: false
       - key: SUPABASE_URL
         sync: false
+      # db.py reads SUPABASE_SERVICE_ROLE_KEY; the chart-storage client (app.py) reads
+      # SUPABASE_SERVICE_KEY. Both are service-role credentials for the same project —
+      # kept as separate names to match the code; could be unified to one later.
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      # Supabase Storage — persists interactive chart figures (survive reload + deploy)
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        sync: false
+      # Google OAuth (Authlib) — login, gated by BETA_WHITELIST
       - key: OAUTH_GOOGLE_CLIENT_ID
         sync: false
       - key: OAUTH_GOOGLE_CLIENT_SECRET
         sync: false
+      # Chainlit — JWT signing secret + public URL
       - key: CHAINLIT_AUTH_SECRET
         sync: false
-      - key: DATABASE_URL
-        sync: false
       - key: CHAINLIT_URL
+        sync: false
+      # LangSmith — optional LLM tracing (research-assistant project); safe to omit
+      - key: LANGSMITH_TRACING
+        sync: false
+      - key: LANGSMITH_API_KEY
+        sync: false
+      - key: LANGSMITH_PROJECT
         sync: false
