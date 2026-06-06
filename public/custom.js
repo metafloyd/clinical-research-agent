@@ -236,6 +236,27 @@
         if (_wasStreaming && !streaming) { setTimeout(playDone, 300); }
         _wasStreaming = streaming;
     }
+    // Chainlit portals tooltips/popovers into a SHADOW ROOT (window.cl_shadowRootElement).
+    // External CSS (custom.css) can't cross the shadow boundary, so the header-button
+    // tooltips ("New Chat" / "Open sidebar") rendered as near-white text on a white box
+    // (empty-looking). Inject a <style> INTO the shadow root (styles there DO apply to its
+    // content) to give the tooltip a dark box + light, readable text. Runs once.
+    function styleShadowTooltips() {
+        var root = window.cl_shadowRootElement;
+        if (!root || typeof root.appendChild !== 'function') return;
+        if (root.getElementById && root.getElementById('cl-tip-style')) return;
+        if (root.querySelector && root.querySelector('#cl-tip-style')) return;
+        var st = document.createElement('style');
+        st.id = 'cl-tip-style';
+        st.textContent =
+            '[role="tooltip"]{' +
+            'background:#0E3293!important;color:#F9FAFB!important;' +
+            'border-color:#0E3293!important;font-size:12px!important;' +
+            'font-weight:500!important;padding:5px 9px!important;border-radius:6px!important;}' +
+            '[role="tooltip"] *{color:#F9FAFB!important;}';
+        root.appendChild(st);
+    }
+
     function _applyChrome() {
         syncThreadView();   // keep in sync across new-chat / thread navigation
         injectGreeting();
@@ -244,6 +265,7 @@
         forceLightTheme();
         setPlaceholder();
         wireAudio();
+        styleShadowTooltips();
     }
     // DEBOUNCE the expensive DOM work. Plotly/streaming add thousands of nodes; firing
     // _applyChrome (which queries the DOM + can fetch /user) per node pegs the main thread
