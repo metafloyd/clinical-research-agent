@@ -36,3 +36,5 @@ stress_results.txt
 stress_run.log
 stress_clarify_results.txt
 stress_clarify.log
+stress_redteam_results.txt
+stress_redteam.log
