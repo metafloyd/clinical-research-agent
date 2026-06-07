@@ -74,18 +74,25 @@ NOT domain experts, aware of the Mayo account.
   the reasoning — that's the expertise.*
 
 ### SLIDE 6 — How I pressured it ⭐ (the rigor / intellectual-honesty slide)
-- **Headline:** *I tried to break my own system — then hardened it.*
-- The story, in 3 beats:
-  - *Built adversarial test batteries — fake IDs, ambiguous queries, "average across ALL,"
-    out-of-schema chart requests.*
-  - *Found real failures: it fabricated study data under pressure; mis-routed edge cases;
-    could run away on aggregation.*
-  - *Fixed them structurally + added regression tests that run on every change. Grounding is
-    measured, not assumed.*
-- ***Say:*** *"The demo you just saw is the happy path. What makes me trust it is everything I
-  did to break it. A clinical tool that hallucinates is worse than no tool — so I went hunting
-  for where it would."*
-- *Purpose: rare credibility. Engineers who adversarially test their own work stand out.*
+- **Headline:** *I red-teamed my own system — then hardened it.*
+- The story, in 3 beats (these are REAL — from the red-team battery):
+  - *Attacked it: prompt injection, fabricated premises, social pressure to change a grounded
+    number, forcing it to combine incompatible numbers, and medical-advice requests.*
+  - *Most held — it refused jailbreaks, kept the real enrollment number even when told "you're
+    wrong, it's 200," and declined dosing/diagnosis. But 5 things broke.*
+  - *Fixed each — and the most important finding: a prompt rule alone couldn't stop it from
+    fabricating enrollment from a user's fake number. I had to fix it in CODE, in the data layer.*
+- **The killer line — ***say this***:** *"The single biggest lesson: prompt instructions don't
+  hold under pressure. When a user asserted a trial had 500 patients, my agent invented enrollment
+  numbers to match — and no amount of prompt wording fixed it reliably. I had to enforce it
+  structurally: the data tool now declares exactly what columns it returned and refuses to show a
+  figure that isn't there. **That's the difference between a demo and a system you can trust** —
+  safety lives in code, not in a prompt."*
+- *(Have a slide note with the concrete tally for Q&A: HELD — jailbreaks, authority pressure,
+  fake PI/drug, dosing/diagnosis, multi-turn manipulation. FIXED — injection, false-premise
+  fabrication [structural], false presupposition, enrollment-decision deferral, cross-source sum.)*
+- *Purpose: THE rarest credibility signal. An engineer who adversarially tests their own work AND
+  is honest that prompts weren't enough is dramatically more convincing than a happy-path demo.*
 
 ### SLIDE 7 — Architecture + Mayo alignment
 - **Headline:** *Grounded, multi-source, aligned to the Mayo account.*

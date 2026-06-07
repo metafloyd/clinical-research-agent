@@ -1,6 +1,6 @@
 # 🩺 Clinical Research Assistant
 
-An AI research assistant that reasons over **ClinicalTrials.gov**, **PubMed**, and an **internal trial-operations database** at once — delivering **grounded, cited** answers about clinical trials, published biomedical literature, and your own study portfolio. Built as a Life Sciences demo — enterprise-grade UX, source-grounded responses, no fabrication.
+An AI research assistant that reasons over **ClinicalTrials.gov**, **PubMed**, and an **internal trial-operations database** at once — and **visualizes** the internal data as interactive charts — delivering **grounded, cited** answers about clinical trials, published biomedical literature, and your own study portfolio. Built as a Life Sciences demo — enterprise-grade UX, source-grounded responses, and reliability hardened by adversarial red-teaming.
 
 ---
 
@@ -25,6 +25,16 @@ An AI research assistant that reasons over **ClinicalTrials.gov**, **PubMed**, a
 - **Composes with the public sources** — internal studies carry a `nct_id` that links to ClinicalTrials.gov, so the agent can compare your accrual to the competitive landscape and the latest literature in a single answer — something no public source can do alone.
 - **Self-contained & safe** — one model pass turns the question into a single `SELECT` against an embedded schema with few-shot examples; read-only is enforced at two layers (SELECT-only validation **and** a read-only connection), results are row-capped, and a malformed query self-corrects once or degrades gracefully. Synthetic demo data only — no real patient information.
 
+### Data visualization
+- **Charts on demand** — ask to chart, plot, or visualize the internal data and the agent renders an **interactive Plotly** chart inline: enrollment by study or site, enrollment trends over time, recruitment funnels, and portfolio breakdowns (by therapeutic area, phase, sponsor, region).
+- **Hallucination-free by construction** — charts are drawn directly from the SQL result rows, so a chart can never show a number the data doesn't contain. Out-of-schema requests (budget, demographics, p-values) are declined rather than faked.
+- **Persistent** — chart figures are stored in Supabase Storage, so they survive page reloads and redeploys.
+
+### Reliability & safety (red-teamed)
+- **Adversarial test batteries** — beyond functional regression suites, the agent is pressure-tested against prompt injection, fabricated premises, authority pressure, cross-source conflation, and out-of-scope medical-advice requests. Findings are fixed and tracked.
+- **Structural guardrails, not just prompt rules** — where prompt instructions proved insufficient under pressure (e.g. inventing enrollment from a user-asserted number), safety is enforced in code: the internal tool declares exactly which columns its rows contain and forbids showing figures that aren't present.
+- **Holds under pressure** — refuses jailbreaks and prompt-injection, does not change a grounded number when a user insists it's wrong, corrects false premises, defers patient enrollment/dosing/diagnosis decisions to a clinician, and never sums internal accrual with the registry's global enrollment.
+
 ### UI & UX
 - **Live token streaming** — responses stream token-by-token.
 - **Personalised greeting** — time-of-day greeting with the signed-in user's real name (from Google profile).
@@ -40,15 +50,18 @@ An AI research assistant that reasons over **ClinicalTrials.gov**, **PubMed**, a
 User message
      │
      ▼
-LangGraph ReAct agent  (gpt-4o-mini + tools)
+LangGraph ReAct agent  (gpt-4o-mini — routing + synthesis)
      │   model decides per the system prompt:
      ├── public trials/literature?   → ClinicalTrials.gov / PubMed MCP tools (parallel when both apply)
-     ├── our portfolio/enrollment?    → query_trial_operations (NL → SQL, local DB)
+     ├── our portfolio/enrollment?    → query_trial_operations  (NL → SQL via gpt-4o, local DB)
+     ├── chart our data?              → plot_trial_operations    (NL → chart spec via gpt-4o → Plotly)
      └── answerable in context?       → respond directly, no tool call
      │
      ▼
-Stream tokens → scrape NCT/PMID sources → append inline citations → persist to Supabase
+Stream tokens → scrape NCT/PMID sources → render inline chart → append citations → persist to Supabase
 ```
+
+**Two-model design (cost-tuned per task):** the main agent — routing **and** answer synthesis — runs on **gpt-4o-mini** (cheap, fast). Only the natural-language-to-SQL and chart-spec generation inside the internal tools use **gpt-4o**, because the smaller model was too weak at text-to-SQL. Capability is spent only where it's needed.
 
 A single agent instance is created **once per server lifetime** (`_shared_agent` in `app.py`) — tools are fetched once, not per session, eliminating per-reload latency. All tools are bound through one shared builder (`research_agent.build_agent()`) wrapped for error-resilience and output caps. Conversation state is kept in `lc_messages` (last 6 messages) in the Chainlit user session. Synchronous Supabase writes run via `asyncio.to_thread` so they never block the event loop.
 
@@ -62,14 +75,16 @@ The system prompt (`prompts.py`) is assembled from independently editable sectio
 
 | Layer | Technology |
 |---|---|
-| LLM | OpenAI **gpt-4o-mini** (`langchain-openai`) |
+| LLM | OpenAI **gpt-4o-mini** (main agent: routing + synthesis) · **gpt-4o** (NL→SQL + chart-spec) — `langchain-openai` |
 | Agent framework | LangGraph `create_react_agent` (ReAct loop with tool binding) |
 | Data sources | ClinicalTrials.gov MCP · PubMed MCP (third-party hosted) · internal SQLite (NL→SQL) |
 | NL→SQL | Self-contained tool — embedded schema + few-shot, read-only guards (stdlib `sqlite3`, zero extra deps) |
+| Charts | **Plotly** interactive figures (`plot_trial_operations`), drawn from SQL rows, persisted to Supabase Storage |
 | UI | **Chainlit 2.11** (ShadCN/Tailwind) |
 | Auth | Google OAuth (beta whitelist) |
-| Persistence | Supabase (Postgres) |
+| Persistence | Supabase — Postgres (chat history + analytics) + Storage (chart figures) |
 | Observability | LangSmith tracing + a standalone eval suite (groundedness / no-overcalling / scope) |
+| Testing | Functional smoke suites + adversarial stress/red-team batteries (run before each change) |
 | Hosting | **Render** (auto-deploys on `git push`) |
 
 ---
@@ -139,25 +154,33 @@ A standalone command-line interface tests the agent directly without the Chainli
 ## Project Structure
 
 ```
-├── app.py              # Chainlit app — OAuth, session start, message handling, streaming
-├── research_agent.py   # LLM config + shared agent builder (binds all tools) + CLI runner
-├── trial_ops.py        # Internal trial-operations DB (SQLite seed) + NL→SQL tool
-├── prompts.py          # System prompt, assembled from named sections
-├── config.py           # MCP URLs, model ID, DB path, beta whitelist
-├── db.py               # Supabase persistence helpers (sync, run via to_thread)
-├── evals.py            # Standalone LangSmith eval suite (not imported by the app)
-├── questions.py        # Starter-question pool
+├── app.py                # Chainlit app — OAuth, session start, message handling, streaming, chart render + Supabase Storage
+├── research_agent.py     # LLM config + shared agent builder (binds all tools) + CLI runner
+├── trial_ops.py          # Internal trial-operations DB (SQLite seed) + NL→SQL tool + chart tool (NL→spec→Plotly)
+├── prompts.py            # System prompt, assembled from named sections (incl. grounding + injection defense)
+├── config.py             # MCP URLs, model IDs, DB path, beta whitelist
+├── db.py                 # Supabase persistence helpers (sync, run via to_thread)
+├── evals.py              # Standalone LangSmith eval suite (not imported by the app)
+├── questions.py          # Starter-question pool
+├── smoke_ctms.py         # Tool-layer regression suite (NL→SQL + chart decline/render)
+├── smoke_agent.py        # Full-agent regression suite (routing + chart routing)
+├── stress_battery.py     # Broad edge / multi-source / adversarial battery
+├── stress_clarify.py     # Ambiguity / assume-and-state battery
+├── stress_redteam.py     # Adversarial red-team battery (injection, fabrication, conflation, OOS)
 ├── requirements.txt
-├── render.yaml         # Render service config
-├── .python-version     # 3.13.3
+├── render.yaml           # Render service config
+├── TECH_STACK.md         # Full stack reference (technologies + connections)
+├── .python-version       # 3.13.3
 ├── .chainlit/
-│   └── config.toml     # App name, custom CSS/JS, theme
+│   └── config.toml       # App name, custom CSS/JS, theme
 └── public/
-    ├── custom.css      # Brand theme, header, greeting, inline citations
-    ├── custom.js       # Greeting, sounds, header name, data-source badge
-    ├── theme.json      # Brand color variables
-    └── *.svg           # Logos, avatar
+    ├── custom.css        # Brand theme, header, greeting, inline citations
+    ├── custom.js         # Greeting, sounds, header name, data-source badge
+    ├── theme.json        # Brand color variables
+    └── *.svg             # Logos, avatar
 ```
+
+> Demo materials (`DEMO_DECK_AND_SCRIPT.md`) and the project memory/roadmap are kept alongside the code for the maintainer.
 
 ---
 
