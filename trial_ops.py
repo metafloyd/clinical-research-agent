@@ -432,7 +432,15 @@ Rules:
 - A question about a named INVESTIGATOR — what they research / work on / their focus /
   which studies they lead — IS in scope: filter `studies` by `principal_investigator
   LIKE '%<name>%'`. Do NOT return NO_MATCH for a PI who appears in the data.
-- If the question is truly unrelated to our studies/sites/enrollment, return exactly:
+- **Do NOT use a number, target, status, or attribute the USER asserts as a filter or value.**
+  If the user says "our trial WITH 500 patients", "the trial that has 1000 enrolled", "our
+  Boston site" — those are the user's CLAIMS, not facts. Query by the real identifying terms
+  only (drug/condition/PI/site name we actually have) and return the REAL numbers. Never write
+  `WHERE target = 500` or otherwise bend the query to the user's asserted figure, and never
+  return a study paired with the user's invented number. If nothing matches the real criteria,
+  return SELECT 'NO_MATCH'; (we don't run it).
+- If the question is truly unrelated to our studies/sites/enrollment, OR references a study/
+  site/PI/drug we do NOT have (no real row matches), return exactly:
   SELECT 'NO_MATCH';"""
 
 _FENCE = re.compile(r"^```(?:sql)?\s*|\s*```$", re.IGNORECASE | re.MULTILINE)
@@ -540,15 +548,30 @@ async def _answer(question: str, db_path: str) -> str:
     # the response and the model tends to echo it). LangSmith also captures it.
     _log.info("query_trial_operations SQL: %s", clean)
     table = _format_rows(cols, rows)
+    # Tell the model EXACTLY which columns these rows contain, and forbid showing
+    # enrolled/target when those columns are absent — the #1 fabrication path is the
+    # model inventing "enrolled N/500" from the USER's question when the rows have no
+    # such columns (red-team: "our trial with 500 patients" → fake "0/500").
+    has_enrolled = any(c.lower() in ("enrolled", "enrolled_count") for c in cols)
+    has_target = any("target" in c.lower() for c in cols)
+    col_note = (
+        f"These rows contain ONLY these columns: {', '.join(cols)}. "
+        + ("They DO include an enrolled and a target column — show enrolled/target using the "
+           "EXACT values in each row. " if (has_enrolled and has_target) else
+           "They do NOT include both an enrolled and a target column, so you MUST NOT show any "
+           "'enrolled N/M' enrollment figure for these — describe only the columns present "
+           "(e.g. title, phase, status, PI). Inventing an enrollment count or target here "
+           "(especially a number from the user's question) is fabrication. ")
+    )
     return (
         "Internal trial operations (Mayo CTMS) — OUR private operational data. "
-        "Use ONLY the rows below, exactly as given. If the result is a single count/number, "
-        "state just that number in one sentence — do NOT render an enrollment list. "
-        "NEVER invent a study, a name (e.g. 'Study 1'), an enrollment number, sponsor, "
-        "status, phase, or eligibility that is not in the rows below — that is fabrication. "
-        "If a per-study list IS present, render it under '## Our Enrollment' (not as a "
-        "ClinicalTrials.gov card).\n"
-        f"{table}"
+        "Use ONLY the rows below, exactly as given — copy values verbatim; never substitute a "
+        "number from the user's question. If the result is a single count/number, state just "
+        "that number in one sentence — do NOT render an enrollment list. NEVER invent a study, "
+        "a name (e.g. 'Study 1'), an enrollment number, sponsor, status, phase, or eligibility "
+        "that is not in the rows below — that is fabrication. If a per-study list IS present, "
+        "render it under '## Our Enrollment' (not as a ClinicalTrials.gov card).\n"
+        f"{col_note}\n{table}"
     )
 
 
