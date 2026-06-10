@@ -198,34 +198,36 @@ def _is_ct_tool(name: str) -> bool:
 
 
 # Human-readable activity labels for the tool steps. The audience reads these
-# during the 10-25s heavy queries — narrate what's happening instead of showing
-# raw tool names like "clinicaltrials_search_studies".
+# during the 10-25s heavy queries. Chainlit RENDERS these as "Used {label}", so
+# each must be a NOUN PHRASE that completes that sentence ("Used ClinicalTrials.gov"),
+# NOT a verb phrase (which would read "Used Searching ClinicalTrials.gov…").
 _STEP_LABELS = {
-    "query_trial_operations":        "🔍 Querying our trial operations…",
-    "plot_trial_operations":         "📊 Building your chart…",
-    "clinicaltrials_search_studies": "🏥 Searching ClinicalTrials.gov…",
-    "clinicaltrials_get_study_record": "🏥 Retrieving the trial record…",
-    "clinicaltrials_get_study_count":  "🏥 Counting matching trials…",
-    "clinicaltrials_get_study_results": "🏥 Retrieving trial results…",
-    "clinicaltrials_find_eligible":  "🏥 Matching eligibility criteria…",
-    "pubmed_europepmc_search":       "📚 Searching the published literature…",
-    "pubmed_search_articles":        "📚 Counting matching papers…",
-    "pubmed_fetch_articles":         "📚 Retrieving article details…",
-    "pubmed_fetch_fulltext":         "📚 Retrieving full text…",
-    "pubmed_find_related":           "📚 Finding related papers…",
-    "pubmed_lookup_mesh":            "📚 Looking up MeSH terms…",
-    "pubmed_format_citations":       "📚 Formatting citations…",
+    "query_trial_operations":        "🔍 our trial operations data",
+    "plot_trial_operations":         "📊 the chart builder",
+    "clinicaltrials_search_studies": "🏥 ClinicalTrials.gov",
+    "clinicaltrials_get_study_record": "🏥 the ClinicalTrials.gov record",
+    "clinicaltrials_get_study_count":  "🏥 the ClinicalTrials.gov trial count",
+    "clinicaltrials_get_study_results": "🏥 ClinicalTrials.gov results",
+    "clinicaltrials_find_eligible":  "🏥 ClinicalTrials.gov eligibility matching",
+    "pubmed_europepmc_search":       "📚 the published literature",
+    "pubmed_search_articles":        "📚 the PubMed paper count",
+    "pubmed_fetch_articles":         "📚 PubMed article details",
+    "pubmed_fetch_fulltext":         "📚 the paper's full text",
+    "pubmed_find_related":           "📚 related PubMed papers",
+    "pubmed_lookup_mesh":            "📚 the MeSH vocabulary",
+    "pubmed_format_citations":       "📚 the citation formatter",
 }
 
 
 def _step_label(tool_name: str) -> str:
+    """Label for a tool activity step. Chainlit shows it as 'Used {label}', so
+    keep these noun phrases. Falls back to a prettified name for unmapped tools."""
     label = _STEP_LABELS.get(tool_name)
     if label:
         return label
-    # Fallback for unmapped tools: keep the source badge + prettify the name.
     pretty = tool_name.replace("clinicaltrials_", "").replace("pubmed_", "").replace("_", " ")
     badge = "🏥" if _is_ct_tool(tool_name) else "📚"
-    return f"{badge} {pretty.capitalize()}…"
+    return f"{badge} {pretty}"
 
 
 # ── Auth ───────────────────────────────────────────────────────────────────────
