@@ -1,8 +1,9 @@
 """
-Suggested search pool — concise starters shown 4 at a time on the welcome screen.
+Suggested search starters shown on the welcome screen.
 
-One line each, easy to scan. Weighted toward the differentiators (our internal
-trial-operations data + on-demand charts) alongside the public sources.
+The first 4 (SHOWCASE) are DETERMINISTIC — always shown, in this order — so the
+landing screen is identical on every reload (demo predictability). They cover the
+full capability arc: our internal data → charts → us-vs-the-field → public evidence.
 
 Badge key:
   "🔍"        → Our internal trial-operations data (CTMS)
@@ -13,21 +14,25 @@ Badge key:
   "🔍 + 🏥"  → Our data vs. the public landscape
 """
 
-QUESTION_POOL = [
-    # ── Our portfolio (internal CTMS) ─────────────────────────────────────────
+# Always shown, in this order — the strongest one-click demo arc.
+SHOWCASE = [
     ("🔍", "How is enrollment tracking across our trials?"),
+    ("📊", "Chart our enrollment by site"),
+    ("🔍 + 🏥", "How does our donanemab trial compare to the field?"),
+    ("🏥 + 📚", "CAR-T in DLBCL — trials and long-term outcomes?"),
+]
+
+# Alternates — kept for reference / future rotation; not currently displayed.
+ALTERNATES = [
+    # ── Our portfolio (internal CTMS) ─────────────────────────────────────────
     ("🔍", "Which of our sites is furthest behind target?"),
     ("🔍", "Which of our studies has the worst enrollment?"),
     ("🔍", "What is Dr. Raj Patel researching?"),
 
     # ── Charts of our data ────────────────────────────────────────────────────
-    ("📊", "Chart our enrollment by site"),
     ("📊", "Show our enrollment trend over time"),
     ("📊", "Visualize our portfolio by therapeutic area"),
     ("📊", "Show our recruitment funnel"),
-
-    # ── Our data vs. the world (cross-source) ─────────────────────────────────
-    ("🔍 + 🏥", "How does our donanemab trial compare to the field?"),
 
     # ── Public trial registry (ClinicalTrials.gov) ────────────────────────────
     ("🏥", "Recruiting Phase 3 trials for pancreatic cancer?"),
@@ -39,6 +44,8 @@ QUESTION_POOL = [
     ("📚", "What's the MeSH classification for HFpEF?"),
 
     # ── Trials + literature together ──────────────────────────────────────────
-    ("🏥 + 📚", "CAR-T in DLBCL — trials and long-term outcomes?"),
     ("🏥 + 📚", "Checkpoint inhibitors in NSCLC — sponsors and evidence?"),
 ]
+
+# Backwards-compatible name used by app.py — first 4 are the deterministic showcase.
+QUESTION_POOL = SHOWCASE + ALTERNATES

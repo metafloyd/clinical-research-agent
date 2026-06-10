@@ -1,7 +1,6 @@
 import asyncio
 import os
 import re
-import random
 from typing import Optional
 
 # asyncpg default pool size (10) hits Supabase session pooler's 15-connection cap.
@@ -198,6 +197,37 @@ def _is_ct_tool(name: str) -> bool:
     return any(k in name.lower() for k in _CT_KEYWORDS)
 
 
+# Human-readable activity labels for the tool steps. The audience reads these
+# during the 10-25s heavy queries — narrate what's happening instead of showing
+# raw tool names like "clinicaltrials_search_studies".
+_STEP_LABELS = {
+    "query_trial_operations":        "🔍 Querying our trial operations…",
+    "plot_trial_operations":         "📊 Building your chart…",
+    "clinicaltrials_search_studies": "🏥 Searching ClinicalTrials.gov…",
+    "clinicaltrials_get_study_record": "🏥 Retrieving the trial record…",
+    "clinicaltrials_get_study_count":  "🏥 Counting matching trials…",
+    "clinicaltrials_get_study_results": "🏥 Retrieving trial results…",
+    "clinicaltrials_find_eligible":  "🏥 Matching eligibility criteria…",
+    "pubmed_europepmc_search":       "📚 Searching the published literature…",
+    "pubmed_search_articles":        "📚 Counting matching papers…",
+    "pubmed_fetch_articles":         "📚 Retrieving article details…",
+    "pubmed_fetch_fulltext":         "📚 Retrieving full text…",
+    "pubmed_find_related":           "📚 Finding related papers…",
+    "pubmed_lookup_mesh":            "📚 Looking up MeSH terms…",
+    "pubmed_format_citations":       "📚 Formatting citations…",
+}
+
+
+def _step_label(tool_name: str) -> str:
+    label = _STEP_LABELS.get(tool_name)
+    if label:
+        return label
+    # Fallback for unmapped tools: keep the source badge + prettify the name.
+    pretty = tool_name.replace("clinicaltrials_", "").replace("pubmed_", "").replace("_", " ")
+    badge = "🏥" if _is_ct_tool(tool_name) else "📚"
+    return f"{badge} {pretty.capitalize()}…"
+
+
 # ── Auth ───────────────────────────────────────────────────────────────────────
 
 @cl.oauth_callback
@@ -218,13 +248,14 @@ def oauth_callback(
 
 @cl.set_starters
 async def set_starters():
-    starters = random.sample(QUESTION_POOL, 4)
+    # Deterministic: always the 4 SHOWCASE starters, same order — the landing
+    # screen is identical on every reload (demo predictability over variety).
     return [
         cl.Starter(
             label=f"{badge} {q}",
             message=q,
         )
-        for badge, q in starters
+        for badge, q in QUESTION_POOL[:4]
     ]
 
 
@@ -386,17 +417,8 @@ async def handle_query(query: str):
         ):
             kind = event["event"]
             if kind == "on_tool_start":
-                _tname = event["name"]
-                if _tname == "plot_trial_operations":
-                    badge = "📊"                       # internal data chart
-                elif _tname == "query_trial_operations":
-                    badge = "🔍"                       # internal DB query
-                elif _is_ct_tool(_tname):
-                    badge = "🏥"                       # ClinicalTrials.gov
-                else:
-                    badge = "📚"                       # PubMed
                 try:
-                    async with cl.Step(name=f"{badge} {event['name']}", type="tool"):
+                    async with cl.Step(name=_step_label(event["name"]), type="tool"):
                         pass
                 except Exception as step_exc:
                     _log.warning("Step persistence failed (non-fatal): %r", step_exc)
