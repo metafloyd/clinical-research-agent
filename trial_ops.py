@@ -730,17 +730,42 @@ def _build_figure(spec: dict, cols, rows):
                                          name=y.replace("_", " ").title(),
                                          line=dict(color=_PALETTE[i % len(_PALETTE)])))
     else:  # bar / grouped bar (default)
-        for i, y in enumerate(ys):
-            fig.add_trace(go.Bar(x=cd.get(x, []), y=cd[y],
-                                 name=y.replace("_", " ").title(),
-                                 marker_color=_PALETTE[i % len(_PALETTE)]))
-        fig.update_layout(barmode="group")
+        labels = ["" if v is None else str(v) for v in cd.get(x, [])]
+        # Many categories or long labels (e.g. 22 study titles) make VERTICAL bars
+        # unreadable: rotated ticks eat most of the fixed height and truncate, bars
+        # become slivers. Flip to HORIZONTAL bars in that case — titles read naturally
+        # and the chart grows in height instead of squeezing.
+        horizontal = len(labels) > 8 or (labels and max(len(l) for l in labels) > 24)
+        if horizontal:
+            short = [l if len(l) <= 32 else l[:31] + "…" for l in labels]
+            for i, y in enumerate(ys):
+                fig.add_trace(go.Bar(y=short, x=cd[y], orientation="h",
+                                     hovertext=labels,
+                                     name=y.replace("_", " ").title(),
+                                     marker_color=_PALETTE[i % len(_PALETTE)]))
+            row_px = 22 if len(ys) == 1 else 16 * len(ys)
+            fig.update_layout(
+                barmode="group",
+                height=min(900, max(380, 120 + row_px * len(labels))),
+                # keep the SQL's row order top-down (row 1 = top bar) — it often
+                # encodes a deliberate ranking (e.g. worst fill rate first)
+                yaxis=dict(autorange="reversed"),
+            )
+        else:
+            for i, y in enumerate(ys):
+                fig.add_trace(go.Bar(x=labels, y=cd[y],
+                                     name=y.replace("_", " ").title(),
+                                     marker_color=_PALETTE[i % len(_PALETTE)]))
+            fig.update_layout(barmode="group")
 
     fig.update_layout(title=dict(text=title, font=dict(size=16, color=_BRAND)),
                       template="plotly_white", colorway=_PALETTE,
                       font=dict(family="Inter, system-ui, sans-serif", size=12),
-                      margin=dict(t=48, l=12, r=12, b=12), height=380,
+                      margin=dict(t=48, l=12, r=12, b=12),
                       legend=dict(orientation="h", y=-0.18))
+    # Default height only where the bar branch didn't already set a dynamic one.
+    if not fig.layout.height:
+        fig.update_layout(height=380)
     return fig
 
 
