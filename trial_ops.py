@@ -563,6 +563,24 @@ async def _answer(question: str, db_path: str) -> str:
            "(e.g. title, phase, status, PI). Inventing an enrollment count or target here "
            "(especially a number from the user's question) is fabrication. ")
     )
+    # When the rows carry a % of target column they are a FILL-RATE RANKING in the order
+    # the query produced (its ORDER BY encodes the worst↔best intent). gpt-4o-mini tends to
+    # re-rank a "worst/best" answer by the raw enrolled count (it called a 9/18 = 50% study
+    # "worst" over a 23/50 = 46% one). Structure beats prose: NAME the top-ranked row right in
+    # the tool output so the model doesn't pick among 22 rows by the most salient raw number.
+    has_pct = any(("pct" in c.lower() or "percent" in c.lower() or "fill" in c.lower())
+                  for c in cols)
+    rank_note = ""
+    if has_pct and len(rows) > 1 and re.search(r"(?i)\border\s+by\b", clean):
+        top = " · ".join(f"{c}={'' if v is None else v}" for c, v in zip(cols, rows[0]))
+        rank_note = (
+            "These rows are ALREADY RANKED by % of target (fill rate) in the order the query "
+            f"produced. The TOP-ranked row is: [{top}]. For a single 'worst / lowest / furthest "
+            "behind' (or 'best / highest / furthest ahead') study or site, THAT top row IS the "
+            "answer — report it and lead with it. Do NOT re-rank by the raw enrolled count: a "
+            "study with fewer patients enrolled is NOT automatically the worst (fill rate, not "
+            "absolute count, defines worst/best). "
+        )
     return (
         "Internal trial operations (Mayo CTMS) — OUR private operational data. "
         "Use ONLY the rows below, exactly as given — copy values verbatim; never substitute a "
@@ -571,7 +589,7 @@ async def _answer(question: str, db_path: str) -> str:
         "a name (e.g. 'Study 1'), an enrollment number, sponsor, status, phase, or eligibility "
         "that is not in the rows below — that is fabrication. If a per-study list IS present, "
         "render it under '## Our Enrollment' (not as a ClinicalTrials.gov card).\n"
-        f"{col_note}\n{table}"
+        f"{col_note}{rank_note}\n{table}"
     )
 
 
