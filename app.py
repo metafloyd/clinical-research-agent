@@ -245,7 +245,17 @@ async def _ensure_agent():
         return _shared_agent
     async with _agent_lock:
         if _shared_agent is None:
+            # Pre-import plotly in a thread WHILE the ~15s MCP tool fetch runs —
+            # otherwise the FIRST chart query pays the import cost inside the turn.
+            def _warm_plotly():
+                try:
+                    import plotly.graph_objects  # noqa: F401
+                    import plotly.io  # noqa: F401
+                except Exception as exc:
+                    _log.warning("plotly pre-import failed (non-fatal): %r", exc)
+            warm = asyncio.create_task(asyncio.to_thread(_warm_plotly))
             _shared_agent = await build_agent()
+            await warm
             _log.info("Agent initialised")
     return _shared_agent
 
@@ -463,14 +473,22 @@ async def handle_query(query: str):
     cl.user_session.set("lc_messages", lc_msgs)
     cl.user_session.set("turn", turn + 1)
 
-    # Persist to Supabase off the event loop (sync SDK would block it otherwise).
+    # Persist to Supabase in the BACKGROUND. The answer is already rendered; these
+    # 2-3 serial REST round-trips were keeping the turn "running" (stop button /
+    # spinner / done-sound all wait on this handler returning) for ~0.5-1.5s.
     user_idx = turn * 2
-    try:
-        await asyncio.to_thread(save_message, sid, user_idx, "user", query, [], [])
-        await asyncio.to_thread(
-            save_message, sid, user_idx + 1, "assistant", msg.content, [], list(sources)
-        )
+    answer = msg.content
+    src = list(sources)
+
+    def _persist():
+        save_message(sid, user_idx, "user", query, [], [])
+        save_message(sid, user_idx + 1, "assistant", answer, [], src)
         if turn == 0:
-            await asyncio.to_thread(set_session_title, sid, query)
-    except Exception:
-        pass
+            set_session_title(sid, query)
+
+    async def _persist_bg():
+        try:
+            await asyncio.to_thread(_persist)
+        except Exception as exc:
+            _log.error("background message persist failed (non-fatal): %r", exc)
+    asyncio.create_task(_persist_bg())
