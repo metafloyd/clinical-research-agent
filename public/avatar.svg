@@ -1,6 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
+  <!-- Rod of Asclepius — white on Mayo blue (assistant avatar) -->
   <circle cx="20" cy="20" r="20" fill="#0E3293"/>
-  <text x="20" y="25" text-anchor="middle"
-        font-family="Inter,Arial,sans-serif"
-        font-size="13" font-weight="700" fill="#FFFFFF">MC</text>
+  <circle cx="20" cy="4.7" r="2.33" fill="#FFFFFF"/>
+  <rect x="18.83" y="6" width="2.33" height="28.67" rx="1.17" fill="#FFFFFF"/>
+  <path d="M 28.67,10 C 14,12 12.67,17 20,19 C 27.33,21 29.33,25.33 20.33,27 C 12.67,28.33 13.33,32.33 22.33,33"
+        stroke="#FFFFFF" stroke-width="2.83" fill="none" stroke-linecap="round"/>
 </svg>

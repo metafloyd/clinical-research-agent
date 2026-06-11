@@ -140,7 +140,9 @@ alert_style = "classic"
 # custom_js_attributes = "async type = \"module\""
 
 # Custom login page image, relative to public directory or external URL
-# login_page_image = "/public/custom-background.jpg"
+# (without this, Chainlit stretches /favicon over the panel with object-cover —
+# the giant cropped circle. This is a purpose-made blue field + centered mark.)
+login_page_image = "/public/login_panel.svg?v=1"
 
 # Custom login page image filter (Tailwind internal filters, no dark/light variants)
 # login_page_image_filter = "brightness-50 grayscale"
@@ -156,7 +158,7 @@ alert_style = "classic"
 logo_file_url = ""
 
 # Load assistant avatar image directly from URL.
-default_avatar_file_url = "/public/avatar.svg"
+default_avatar_file_url = "/public/avatar.svg?v=2"  # bump v on artwork change (browser caches hard)
 
 # Avatar size in pixels (default: 20).
 # avatar_size = 20

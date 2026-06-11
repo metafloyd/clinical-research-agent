@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1600">
+  <!-- Login page right panel: uniform Mayo blue field with the centered clinic mark.
+       Rendered with object-cover, so side-cropping at odd aspect ratios only trims
+       flat blue — the mark stays centered and uncropped. -->
+  <rect width="1200" height="1600" fill="#0E3293"/>
+  <g>
+    <circle cx="600" cy="662" r="21" fill="#FFFFFF"/>
+    <rect x="589.5" y="674" width="21" height="258" rx="10.5" fill="#FFFFFF"/>
+    <path d="M 678,710 C 546,728 534,773 600,791 C 666,809 684,848 603,863 C 534,875 540,911 621,917"
+          stroke="#FFFFFF" stroke-width="25.5" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>
