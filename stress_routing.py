@@ -14,8 +14,8 @@ Non-zero exit on any failure. Throttled + 429-retry (gpt-4o NL→SQL has a 30k T
 
 GROUND TRUTH (recomputed from trial_ops.db on 2026-06-11):
   22 studies · 15 active (status != Completed) · 7 completed · 8 recruiting · 16 Phase 3
-  donanemab (MAYO-2023-022 / NCT04437511) = 61/75
-  worst study by fill rate = MAYO-2024-018 @ 46%  ·  worst site = London @ 53%
+  donanemab (PROT-2023-022 / NCT04437511) = 61/75
+  worst study by fill rate = PROT-2024-018 @ 46%  ·  worst site = London @ 53%
   total current enrolled = 1431  ·  7 sites  ·  Dr. Helen Park leads 4 studies
 """
 
@@ -54,7 +54,7 @@ CASES = [
     ("int-sites-count", "how many sites do we have",
         [used("query_trial_operations"), not_used("plot")]),
     ("int-worst-study", "what is our worst performing study by enrollment",
-        [used("query_trial_operations"), has("mayo-2024-018"), not_used("plot")]),
+        [used("query_trial_operations"), has("prot-2024-018"), not_used("plot")]),
     ("int-recruiting", "how many of our trials are still recruiting",
         [used("query_trial_operations"), not_used("clinicaltrials")]),
 

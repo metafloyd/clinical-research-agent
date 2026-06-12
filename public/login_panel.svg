@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1600">
-  <!-- Login page right panel: uniform Mayo blue field with the centered clinic mark.
+  <!-- Login page right panel: uniform brand blue field with the centered clinic mark.
        Rendered with object-cover, so side-cropping at odd aspect ratios only trims
        flat blue — the mark stays centered and uncropped. -->
   <rect width="1200" height="1600" fill="#0E3293"/>

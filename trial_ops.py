@@ -38,7 +38,7 @@ _log = logging.getLogger(__name__)
 
 SCHEMA_DDL = """
 CREATE TABLE studies (
-    internal_id            TEXT PRIMARY KEY,   -- our protocol ID, e.g. 'MAYO-2023-007'
+    internal_id            TEXT PRIMARY KEY,   -- our protocol ID, e.g. 'PROT-2023-007'
     nct_id                 TEXT,               -- ClinicalTrials.gov ID (NULL if unregistered)
     title                  TEXT,
     therapeutic_area       TEXT,
@@ -104,12 +104,12 @@ Tables (SQLite):
     planned_end_date = target completion; enrollment_open_date = recruitment start.
 - sites(site_id, site_name, city, state, country, region, site_type)
     state is a 2-LETTER US code ('' for international). The 7 sites:
-      ('SITE-RST','Mayo Clinic Rochester','Rochester','MN','USA','Midwest','Academic Medical Center')
-      ('SITE-JAX','Mayo Clinic Jacksonville','Jacksonville','FL','USA','Southeast','Academic Medical Center')
-      ('SITE-PHX','Mayo Clinic Arizona','Scottsdale','AZ','USA','Southwest','Academic Medical Center')
-      ('SITE-MHS','Mayo Clinic Health System','La Crosse','WI','USA','Midwest','Health System')
-      ('SITE-AUS','Mayo Collaborative — Austin','Austin','TX','USA','South','Community')
-      ('SITE-SEA','Mayo Collaborative — Seattle','Seattle','WA','USA','West','Academic Medical Center')
+      ('SITE-RST','Rochester Medical Center','Rochester','MN','USA','Midwest','Academic Medical Center')
+      ('SITE-JAX','Jacksonville Medical Center','Jacksonville','FL','USA','Southeast','Academic Medical Center')
+      ('SITE-PHX','Arizona Medical Center','Scottsdale','AZ','USA','Southwest','Academic Medical Center')
+      ('SITE-MHS','La Crosse Health System','La Crosse','WI','USA','Midwest','Health System')
+      ('SITE-AUS','Collaborative Site — Austin','Austin','TX','USA','South','Community')
+      ('SITE-SEA','Collaborative Site — Seattle','Seattle','WA','USA','West','Academic Medical Center')
       ('SITE-LON','Partner Site — London','London','','UK','International','Academic Medical Center')
     Map a place to the right column: "Arizona"→state='AZ', "Rochester"→city='Rochester',
     "London"/"international"→country='UK' or region='International'. Prefer site_name LIKE when unsure.
@@ -134,61 +134,61 @@ Join studies↔enrollment_current on internal_id; enrollment_current↔sites on 
 # (internal_id, nct_id, title, therapeutic_area, phase, status, PI, target,
 #  start_date, enrollment_open_date, planned_end_date, sponsor_type)
 STUDIES = [
-    ("MAYO-2021-014", "NCT03574597", "Semaglutide for Cardiovascular Outcomes in Overweight/Obesity",
+    ("PROT-2021-014", "NCT03574597", "Semaglutide for Cardiovascular Outcomes in Overweight/Obesity",
      "Cardiometabolic", "Phase 3", "Active, not recruiting", "Dr. Helen Park", 180, "2021-06-15", "2021-08-01", "2025-06-30", "Industry"),
-    ("MAYO-2021-033", "NCT01994889", "Tafamidis in Transthyretin Amyloid Cardiomyopathy (ATTR-ACT)",
+    ("PROT-2021-033", "NCT01994889", "Tafamidis in Transthyretin Amyloid Cardiomyopathy (ATTR-ACT)",
      "Cardiology", "Phase 3", "Completed", "Dr. Mark Reyes", 55, "2021-04-22", "2021-06-01", "2024-03-31", "Industry"),
-    ("MAYO-2022-009", "NCT03036124", "Dapagliflozin in Heart Failure with Reduced EF (DAPA-HF)",
+    ("PROT-2022-009", "NCT03036124", "Dapagliflozin in Heart Failure with Reduced EF (DAPA-HF)",
      "Cardiology", "Phase 3", "Completed", "Dr. Mark Reyes", 110, "2022-02-18", "2022-04-01", "2024-12-31", "Industry"),
-    ("MAYO-2022-031", "NCT03548935", "Semaglutide 2.4 mg for Weight Management",
+    ("PROT-2022-031", "NCT03548935", "Semaglutide 2.4 mg for Weight Management",
      "Cardiometabolic", "Phase 3", "Completed", "Dr. Helen Park", 120, "2022-01-10", "2022-03-01", "2024-06-30", "Industry"),
-    ("MAYO-2023-007", "NCT02578680", "Pembrolizumab plus Chemotherapy in Metastatic NSCLC",
+    ("PROT-2023-007", "NCT02578680", "Pembrolizumab plus Chemotherapy in Metastatic NSCLC",
      "Oncology", "Phase 3", "Active, not recruiting", "Dr. Raj Patel", 90, "2023-03-01", "2023-05-01", "2026-09-30", "Industry"),
-    ("MAYO-2023-022", "NCT04437511", "Donanemab in Early Symptomatic Alzheimer's Disease",
+    ("PROT-2023-022", "NCT04437511", "Donanemab in Early Symptomatic Alzheimer's Disease",
      "Neurology", "Phase 3", "Recruiting", "Dr. Susan Cole", 75, "2023-09-12", "2023-11-01", "2027-03-31", "Industry"),
-    ("MAYO-2023-041", "NCT03887455", "Lecanemab in Early Alzheimer's Disease (Clarity AD)",
+    ("PROT-2023-041", "NCT03887455", "Lecanemab in Early Alzheimer's Disease (Clarity AD)",
      "Neurology", "Phase 3", "Active, not recruiting", "Dr. Susan Cole", 85, "2023-11-03", "2024-01-01", "2026-12-31", "Industry"),
-    ("MAYO-2023-055", "NCT03954834", "Tirzepatide for Glycemic Control in Type 2 Diabetes (SURPASS)",
+    ("PROT-2023-055", "NCT03954834", "Tirzepatide for Glycemic Control in Type 2 Diabetes (SURPASS)",
      "Cardiometabolic", "Phase 3", "Active, not recruiting", "Dr. Helen Park", 95, "2023-06-27", "2023-08-01", "2026-06-30", "Industry"),
-    ("MAYO-2024-003", "NCT01866319", "Pembrolizumab versus Ipilimumab in Advanced Melanoma",
+    ("PROT-2024-003", "NCT01866319", "Pembrolizumab versus Ipilimumab in Advanced Melanoma",
      "Oncology", "Phase 3", "Completed", "Dr. Raj Patel", 60, "2024-02-05", "2024-04-01", "2025-11-30", "Industry"),
-    ("MAYO-2024-012", "NCT03434379", "Atezolizumab plus Bevacizumab in Hepatocellular Carcinoma (IMbrave150)",
+    ("PROT-2024-012", "NCT03434379", "Atezolizumab plus Bevacizumab in Hepatocellular Carcinoma (IMbrave150)",
      "Oncology", "Phase 3", "Active, not recruiting", "Dr. Raj Patel", 70, "2024-03-19", "2024-05-01", "2027-06-30", "Industry"),
-    ("MAYO-2024-018", "NCT04368728", "mRNA Vaccine Immunogenicity Substudy",
+    ("PROT-2024-018", "NCT04368728", "mRNA Vaccine Immunogenicity Substudy",
      "Infectious Disease", "Phase 2", "Recruiting", "Dr. Liam Foster", 50, "2024-07-20", "2024-09-01", "2026-12-31", "Federal"),
-    ("MAYO-2024-027", "NCT02348216", "Axicabtagene Ciloleucel in Refractory Large B-Cell Lymphoma",
+    ("PROT-2024-027", "NCT02348216", "Axicabtagene Ciloleucel in Refractory Large B-Cell Lymphoma",
      "Hematology", "Phase 2", "Recruiting", "Dr. Anita Rao", 40, "2024-05-14", "2024-07-01", "2026-06-30", "Industry"),
-    ("MAYO-2024-039", "NCT04381936", "Dexamethasone in Hospitalized COVID-19 (RECOVERY substudy)",
+    ("PROT-2024-039", "NCT04381936", "Dexamethasone in Hospitalized COVID-19 (RECOVERY substudy)",
      "Infectious Disease", "Phase 3", "Completed", "Dr. Liam Foster", 65, "2024-01-30", "2024-03-01", "2025-06-30", "Investigator-initiated"),
-    ("MAYO-2025-002", None, "Investigator-Initiated CAR-NK Cell Therapy in Refractory Solid Tumors",
+    ("PROT-2025-002", None, "Investigator-Initiated CAR-NK Cell Therapy in Refractory Solid Tumors",
      "Hematology", "Phase 1", "Recruiting", "Dr. Anita Rao", 24, "2025-01-15", "2025-03-01", "2027-01-31", "Investigator-initiated"),
     # ── added in the 2026-06-05 enrichment (more areas / phases / sponsors / sites) ──
-    ("MAYO-2022-047", "NCT02856828", "Nivolumab plus Ipilimumab in Advanced Renal Cell Carcinoma (CheckMate)",
+    ("PROT-2022-047", "NCT02856828", "Nivolumab plus Ipilimumab in Advanced Renal Cell Carcinoma (CheckMate)",
      "Oncology", "Phase 3", "Completed", "Dr. Raj Patel", 80, "2022-05-10", "2022-07-01", "2025-03-31", "Industry"),
-    ("MAYO-2023-064", "NCT03347279", "Tezepelumab in Severe Uncontrolled Asthma (NAVIGATOR)",
+    ("PROT-2023-064", "NCT03347279", "Tezepelumab in Severe Uncontrolled Asthma (NAVIGATOR)",
      "Respiratory", "Phase 3", "Active, not recruiting", "Dr. Priya Nair", 70, "2023-08-01", "2023-10-01", "2026-10-31", "Industry"),
-    ("MAYO-2024-051", "NCT03594110", "Empagliflozin in Chronic Kidney Disease (EMPA-KIDNEY)",
+    ("PROT-2024-051", "NCT03594110", "Empagliflozin in Chronic Kidney Disease (EMPA-KIDNEY)",
      "Nephrology", "Phase 3", "Recruiting", "Dr. Mark Reyes", 100, "2024-09-05", "2024-11-01", "2027-09-30", "Industry"),
-    ("MAYO-2022-072", "NCT02675426", "Upadacitinib in Moderate-to-Severe Rheumatoid Arthritis (SELECT)",
+    ("PROT-2022-072", "NCT02675426", "Upadacitinib in Moderate-to-Severe Rheumatoid Arthritis (SELECT)",
      "Rheumatology", "Phase 3", "Completed", "Dr. Priya Nair", 65, "2022-09-18", "2022-11-01", "2025-02-28", "Industry"),
-    ("MAYO-2024-066", "NCT05256134", "Lecanemab Subcutaneous Maintenance Dosing",
+    ("PROT-2024-066", "NCT05256134", "Lecanemab Subcutaneous Maintenance Dosing",
      "Neurology", "Phase 2", "Recruiting", "Dr. Susan Cole", 45, "2024-10-22", "2024-12-01", "2026-12-31", "Industry"),
-    ("MAYO-2025-011", None, "Investigator-Initiated CRISPR Gene Editing in Sickle Cell Disease",
+    ("PROT-2025-011", None, "Investigator-Initiated CRISPR Gene Editing in Sickle Cell Disease",
      "Hematology", "Phase 1", "Recruiting", "Dr. Anita Rao", 18, "2025-02-20", "2025-04-01", "2027-02-28", "Investigator-initiated"),
-    ("MAYO-2023-088", "NCT04944992", "Semaglutide in Non-alcoholic Steatohepatitis (NASH/MASH)",
+    ("PROT-2023-088", "NCT04944992", "Semaglutide in Non-alcoholic Steatohepatitis (NASH/MASH)",
      "Cardiometabolic", "Phase 2", "Active, not recruiting", "Dr. Helen Park", 55, "2023-12-01", "2024-02-01", "2026-05-31", "Industry"),
-    ("MAYO-2024-079", "NCT04576988", "Sotatercept in Pulmonary Arterial Hypertension (STELLAR)",
+    ("PROT-2024-079", "NCT04576988", "Sotatercept in Pulmonary Arterial Hypertension (STELLAR)",
      "Cardiology", "Phase 3", "Recruiting", "Dr. Mark Reyes", 60, "2024-11-14", "2025-01-01", "2028-01-31", "Industry"),
 ]
 
 # (site_id, site_name, city, state, country, region, site_type)
 SITES = [
-    ("SITE-RST", "Mayo Clinic Rochester", "Rochester", "MN", "USA", "Midwest", "Academic Medical Center"),
-    ("SITE-JAX", "Mayo Clinic Jacksonville", "Jacksonville", "FL", "USA", "Southeast", "Academic Medical Center"),
-    ("SITE-PHX", "Mayo Clinic Arizona", "Scottsdale", "AZ", "USA", "Southwest", "Academic Medical Center"),
-    ("SITE-MHS", "Mayo Clinic Health System", "La Crosse", "WI", "USA", "Midwest", "Health System"),
-    ("SITE-AUS", "Mayo Collaborative — Austin", "Austin", "TX", "USA", "South", "Community"),
-    ("SITE-SEA", "Mayo Collaborative — Seattle", "Seattle", "WA", "USA", "West", "Academic Medical Center"),
+    ("SITE-RST", "Rochester Medical Center", "Rochester", "MN", "USA", "Midwest", "Academic Medical Center"),
+    ("SITE-JAX", "Jacksonville Medical Center", "Jacksonville", "FL", "USA", "Southeast", "Academic Medical Center"),
+    ("SITE-PHX", "Arizona Medical Center", "Scottsdale", "AZ", "USA", "Southwest", "Academic Medical Center"),
+    ("SITE-MHS", "La Crosse Health System", "La Crosse", "WI", "USA", "Midwest", "Health System"),
+    ("SITE-AUS", "Collaborative Site — Austin", "Austin", "TX", "USA", "South", "Community"),
+    ("SITE-SEA", "Collaborative Site — Seattle", "Seattle", "WA", "USA", "West", "Academic Medical Center"),
     ("SITE-LON", "Partner Site — London", "London", "", "UK", "International", "Academic Medical Center"),
 ]
 
@@ -197,60 +197,60 @@ SITES = [
 # The original 14 studies keep their exact totals (so prior facts/tests hold); new
 # studies add the new sites (AUS/SEA/LON) for geographic richness.
 _CURRENT = [
-    ("MAYO-2021-014", "SITE-RST", 90, 142, 96, "Ahead"),
-    ("MAYO-2021-014", "SITE-JAX", 50, 78,  52, "On track"),
-    ("MAYO-2021-014", "SITE-PHX", 40, 49,  31, "Behind"),
-    ("MAYO-2022-031", "SITE-RST", 70, 95,  70, "Complete"),
-    ("MAYO-2022-031", "SITE-JAX", 50, 63,  50, "Complete"),
-    ("MAYO-2023-007", "SITE-RST", 45, 61,  38, "Behind"),
-    ("MAYO-2023-007", "SITE-PHX", 25, 40,  27, "Ahead"),
-    ("MAYO-2023-007", "SITE-MHS", 20, 22,  14, "Behind"),
-    ("MAYO-2023-022", "SITE-RST", 35, 55,  24, "Behind"),
-    ("MAYO-2023-022", "SITE-JAX", 20, 38,  19, "On track"),
-    ("MAYO-2023-022", "SITE-PHX", 20, 31,  18, "On track"),
-    ("MAYO-2024-003", "SITE-PHX", 35, 48,  35, "Complete"),
-    ("MAYO-2024-003", "SITE-RST", 25, 33,  25, "Complete"),
-    ("MAYO-2024-018", "SITE-RST", 25, 27,  12, "Behind"),
-    ("MAYO-2024-018", "SITE-MHS", 25, 19,  11, "Behind"),
-    ("MAYO-2021-033", "SITE-RST", 35, 60,  35, "Complete"),
-    ("MAYO-2021-033", "SITE-JAX", 20, 35,  20, "Complete"),
-    ("MAYO-2022-009", "SITE-RST", 60, 92,  60, "Complete"),
-    ("MAYO-2022-009", "SITE-JAX", 50, 78,  50, "Complete"),
-    ("MAYO-2023-041", "SITE-RST", 40, 70,  40, "On track"),
-    ("MAYO-2023-041", "SITE-JAX", 25, 45,  26, "Ahead"),
-    ("MAYO-2023-041", "SITE-PHX", 20, 32,  16, "Behind"),
-    ("MAYO-2023-055", "SITE-RST", 50, 80,  50, "On track"),
-    ("MAYO-2023-055", "SITE-JAX", 30, 55,  33, "Ahead"),
-    ("MAYO-2023-055", "SITE-MHS", 15, 25,  13, "Behind"),
-    ("MAYO-2024-012", "SITE-RST", 35, 55,  35, "On track"),
-    ("MAYO-2024-012", "SITE-JAX", 25, 40,  24, "Behind"),
-    ("MAYO-2024-012", "SITE-PHX", 10, 18,   9, "Behind"),
-    ("MAYO-2024-027", "SITE-RST", 25, 38,  18, "Behind"),
-    ("MAYO-2024-027", "SITE-PHX", 15, 22,  11, "Behind"),
-    ("MAYO-2024-039", "SITE-RST", 40, 70,  40, "Complete"),
-    ("MAYO-2024-039", "SITE-MHS", 25, 30,  25, "Complete"),
-    ("MAYO-2025-002", "SITE-RST", 14, 20,   8, "Behind"),
-    ("MAYO-2025-002", "SITE-PHX", 10, 12,   5, "Behind"),
+    ("PROT-2021-014", "SITE-RST", 90, 142, 96, "Ahead"),
+    ("PROT-2021-014", "SITE-JAX", 50, 78,  52, "On track"),
+    ("PROT-2021-014", "SITE-PHX", 40, 49,  31, "Behind"),
+    ("PROT-2022-031", "SITE-RST", 70, 95,  70, "Complete"),
+    ("PROT-2022-031", "SITE-JAX", 50, 63,  50, "Complete"),
+    ("PROT-2023-007", "SITE-RST", 45, 61,  38, "Behind"),
+    ("PROT-2023-007", "SITE-PHX", 25, 40,  27, "Ahead"),
+    ("PROT-2023-007", "SITE-MHS", 20, 22,  14, "Behind"),
+    ("PROT-2023-022", "SITE-RST", 35, 55,  24, "Behind"),
+    ("PROT-2023-022", "SITE-JAX", 20, 38,  19, "On track"),
+    ("PROT-2023-022", "SITE-PHX", 20, 31,  18, "On track"),
+    ("PROT-2024-003", "SITE-PHX", 35, 48,  35, "Complete"),
+    ("PROT-2024-003", "SITE-RST", 25, 33,  25, "Complete"),
+    ("PROT-2024-018", "SITE-RST", 25, 27,  12, "Behind"),
+    ("PROT-2024-018", "SITE-MHS", 25, 19,  11, "Behind"),
+    ("PROT-2021-033", "SITE-RST", 35, 60,  35, "Complete"),
+    ("PROT-2021-033", "SITE-JAX", 20, 35,  20, "Complete"),
+    ("PROT-2022-009", "SITE-RST", 60, 92,  60, "Complete"),
+    ("PROT-2022-009", "SITE-JAX", 50, 78,  50, "Complete"),
+    ("PROT-2023-041", "SITE-RST", 40, 70,  40, "On track"),
+    ("PROT-2023-041", "SITE-JAX", 25, 45,  26, "Ahead"),
+    ("PROT-2023-041", "SITE-PHX", 20, 32,  16, "Behind"),
+    ("PROT-2023-055", "SITE-RST", 50, 80,  50, "On track"),
+    ("PROT-2023-055", "SITE-JAX", 30, 55,  33, "Ahead"),
+    ("PROT-2023-055", "SITE-MHS", 15, 25,  13, "Behind"),
+    ("PROT-2024-012", "SITE-RST", 35, 55,  35, "On track"),
+    ("PROT-2024-012", "SITE-JAX", 25, 40,  24, "Behind"),
+    ("PROT-2024-012", "SITE-PHX", 10, 18,   9, "Behind"),
+    ("PROT-2024-027", "SITE-RST", 25, 38,  18, "Behind"),
+    ("PROT-2024-027", "SITE-PHX", 15, 22,  11, "Behind"),
+    ("PROT-2024-039", "SITE-RST", 40, 70,  40, "Complete"),
+    ("PROT-2024-039", "SITE-MHS", 25, 30,  25, "Complete"),
+    ("PROT-2025-002", "SITE-RST", 14, 20,   8, "Behind"),
+    ("PROT-2025-002", "SITE-PHX", 10, 12,   5, "Behind"),
     # new studies (introduce AUS / SEA / LON)
-    ("MAYO-2022-047", "SITE-RST", 45, 70,  45, "Complete"),
-    ("MAYO-2022-047", "SITE-SEA", 35, 55,  35, "Complete"),
-    ("MAYO-2023-064", "SITE-RST", 30, 48,  30, "On track"),
-    ("MAYO-2023-064", "SITE-JAX", 25, 35,  22, "On track"),
-    ("MAYO-2023-064", "SITE-AUS", 15, 20,  12, "Behind"),
-    ("MAYO-2024-051", "SITE-RST", 40, 55,  28, "Behind"),
-    ("MAYO-2024-051", "SITE-SEA", 35, 35,  18, "Behind"),
-    ("MAYO-2024-051", "SITE-MHS", 25, 22,  12, "Behind"),
-    ("MAYO-2022-072", "SITE-RST", 40, 60,  40, "Complete"),
-    ("MAYO-2022-072", "SITE-JAX", 25, 42,  25, "Complete"),
-    ("MAYO-2024-066", "SITE-RST", 25, 30,  16, "On track"),
-    ("MAYO-2024-066", "SITE-PHX", 20, 20,  11, "Behind"),
-    ("MAYO-2025-011", "SITE-RST", 10, 12,   6, "Behind"),
-    ("MAYO-2025-011", "SITE-SEA", 8,  7,    3, "Behind"),
-    ("MAYO-2023-088", "SITE-RST", 30, 48,  30, "Ahead"),
-    ("MAYO-2023-088", "SITE-JAX", 25, 35,  22, "On track"),
-    ("MAYO-2024-079", "SITE-RST", 30, 32,  18, "Behind"),
-    ("MAYO-2024-079", "SITE-AUS", 15, 18,  10, "Behind"),
-    ("MAYO-2024-079", "SITE-LON", 15, 15,   8, "On track"),
+    ("PROT-2022-047", "SITE-RST", 45, 70,  45, "Complete"),
+    ("PROT-2022-047", "SITE-SEA", 35, 55,  35, "Complete"),
+    ("PROT-2023-064", "SITE-RST", 30, 48,  30, "On track"),
+    ("PROT-2023-064", "SITE-JAX", 25, 35,  22, "On track"),
+    ("PROT-2023-064", "SITE-AUS", 15, 20,  12, "Behind"),
+    ("PROT-2024-051", "SITE-RST", 40, 55,  28, "Behind"),
+    ("PROT-2024-051", "SITE-SEA", 35, 35,  18, "Behind"),
+    ("PROT-2024-051", "SITE-MHS", 25, 22,  12, "Behind"),
+    ("PROT-2022-072", "SITE-RST", 40, 60,  40, "Complete"),
+    ("PROT-2022-072", "SITE-JAX", 25, 42,  25, "Complete"),
+    ("PROT-2024-066", "SITE-RST", 25, 30,  16, "On track"),
+    ("PROT-2024-066", "SITE-PHX", 20, 20,  11, "Behind"),
+    ("PROT-2025-011", "SITE-RST", 10, 12,   6, "Behind"),
+    ("PROT-2025-011", "SITE-SEA", 8,  7,    3, "Behind"),
+    ("PROT-2023-088", "SITE-RST", 30, 48,  30, "Ahead"),
+    ("PROT-2023-088", "SITE-JAX", 25, 35,  22, "On track"),
+    ("PROT-2024-079", "SITE-RST", 30, 32,  18, "Behind"),
+    ("PROT-2024-079", "SITE-AUS", 15, 18,  10, "Behind"),
+    ("PROT-2024-079", "SITE-LON", 15, 15,   8, "On track"),
 ]
 
 _AS_OF = "2026-05-01"        # latest monthly snapshot ("current")
@@ -395,7 +395,7 @@ Q: Enrollment over time across all our studies (last 12 months).
 SQL: SELECT as_of_date, SUM(enrolled) AS enrolled FROM enrollment
      GROUP BY as_of_date ORDER BY as_of_date DESC LIMIT 12;"""
 
-_SQLGEN_SYSTEM = f"""You translate a question about Mayo Clinic's INTERNAL trial-operations \
+_SQLGEN_SYSTEM = f"""You translate a question about our organization's INTERNAL trial-operations \
 database into ONE SQLite SELECT query.
 
 {SCHEMA_DESCRIPTION}
@@ -582,7 +582,7 @@ async def _answer(question: str, db_path: str) -> str:
             "absolute count, defines worst/best). "
         )
     return (
-        "Internal trial operations (Mayo CTMS) — OUR private operational data. "
+        "Internal trial operations (CTMS) — OUR private operational data. "
         "Use ONLY the rows below, exactly as given — copy values verbatim; never substitute a "
         "number from the user's question. If the result is a single count/number, state just "
         "that number in one sentence — do NOT render an enrollment list. NEVER invent a study, "
@@ -594,7 +594,7 @@ async def _answer(question: str, db_path: str) -> str:
 
 
 _TOOL_DESCRIPTION = (
-    "Query Mayo Clinic's INTERNAL trial-operations database (our OWN study portfolio, "
+    "Query our organization's INTERNAL trial-operations database (our OWN study portfolio, "
     "sites, and per-site enrollment vs. target) with a plain-English question. Use this "
     "for anything about OUR trials, OUR enrollment/accrual, OUR sites, recruitment status, "
     "or how our studies are tracking against target. This is private operational data, "
@@ -626,7 +626,7 @@ _PALETTE = ["#0E3293", "#3B82F6", "#60A5FA", "#93C5FD", "#10B981",
 
 import json as _json
 
-_CHART_SYSTEM = f"""You turn a question about Mayo Clinic's INTERNAL trial-operations \
+_CHART_SYSTEM = f"""You turn a question about our organization's INTERNAL trial-operations \
 database into ONE chart. Reply with ONLY a JSON object (no prose, no fences) with keys:
   "sql": a single read-only SQLite SELECT that returns the chart data,
   "chart_type": one of "bar" | "line" | "donut" | "funnel",
@@ -812,7 +812,7 @@ async def _plot_answer(question: str, db_path: str):
 
 
 _PLOT_TOOL_DESCRIPTION = (
-    "Render a CHART / visualization of Mayo Clinic's INTERNAL trial-operations data — "
+    "Render a CHART / visualization of our organization's INTERNAL trial-operations data — "
     "enrollment by study or site, enrollment trends over time, recruitment funnels, or "
     "portfolio breakdowns (by therapeutic area, phase, sponsor, region). Use this whenever "
     "the user asks to chart / visualize / graph / plot / show a trend, breakdown, or "

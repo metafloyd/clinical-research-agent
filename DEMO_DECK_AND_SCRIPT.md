@@ -1,7 +1,7 @@
-# Demo Deck + Script — Mayo Clinical Research Assistant (CREDIBILITY-FIRST)
+# Demo Deck + Script — Clinical Research Assistant (CREDIBILITY-FIRST)
 
 **Audience:** Quantiphi leadership — technical architects + account manager. Tech-savvy,
-NOT domain experts, aware of the Mayo account.
+NOT domain experts, aware of the target account.
 **Format:** Slides FRAME, live demo CARRIES (~12–15 min). Live, with safety rails.
 
 > **PRIMARY GOAL (60–70%): credibility / visibility.** The room should walk out thinking:
@@ -30,11 +30,11 @@ NOT domain experts, aware of the Mayo account.
 
 ## PART A — THE SLIDE DECK (8 slides + 2 backup)
 
-> Style: ≤15 words body text per slide. Mayo-navy (#0E3293) + white. Big type, whitespace.
+> Style: ≤15 words body text per slide. Brand navy (#0E3293) + white. Big type, whitespace.
 > Architects distrust busy slides. One takeaway each. YOU talk; slides anchor.
 
 ### SLIDE 1 — Title
-- *Mayo Clinical Research Assistant* — *A multi-source research agent for clinical trial intelligence.*
+- *Clinical Research Assistant* — *A multi-source research agent for clinical trial intelligence.*
 - Your name/role/date. Small "built with Claude · LangGraph · Chainlit · Supabase" line —
   signals a real, modern build.
 
@@ -94,12 +94,12 @@ NOT domain experts, aware of the Mayo account.
 - *Purpose: THE rarest credibility signal. An engineer who adversarially tests their own work AND
   is honest that prompts weren't enough is dramatically more convincing than a happy-path demo.*
 
-### SLIDE 7 — Architecture + Mayo alignment
-- **Headline:** *Grounded, multi-source, aligned to the Mayo account.*
+### SLIDE 7 — Architecture + account alignment
+- **Headline:** *Grounded, multi-source, aligned to the target account.*
 - Architecture diagram (from `TECH_STACK.md` §1): Browser → Agent (LangGraph ReAct) →
   [ClinicalTrials.gov MCP · PubMed MCP · Internal CTMS NL→SQL → Plotly] → grounded answer;
   Auth (Google OAuth), persistence (Supabase).
-- One line: *"Speaks Mayo's world — our studies, sites, PIs, enrollment vs target — and
+- One line: *"Speaks the client's world — our studies, sites, PIs, enrollment vs target — and
   composes it with the public landscape."*
 - *Purpose: the architects' map + the explicit account tie-in.*
 
@@ -110,7 +110,7 @@ NOT domain experts, aware of the Mayo account.
   - *A 4th source — drug-safety signals, or patient-to-trial eligibility matching.*
   - *Productionize — real CTMS connector, role-based access, audit trail.*
 - **The ask:** *"I built this to prove the concept is real and the engineering is sound. I'd
-  like buy-in to take it from prototype to a Mayo-account asset."*
+  like buy-in to take it from prototype to an account asset."*
 
 ### BACKUP SLIDES (ready, present only if asked)
 - **B1 — Quality numbers:** eval scores (groundedness), the regression smoke counts, the
@@ -129,7 +129,7 @@ NOT domain experts, aware of the Mayo account.
 **[Framing — BEFORE typing]**
 > *"This is the assistant, live. One thing up front: the interesting part isn't that it
 > searches clinical databases — plenty of tools do that. It's that it reasons over three
-> sources at once — the public registry, the literature, and Mayo's own internal trial
+> sources at once — the public registry, the literature, and the institution's own internal trial
 > operations — and composes them into one grounded answer. Composing across those silos is
 > the hard part, and it's the whole point. Let me build up to it."*
 
@@ -142,7 +142,7 @@ NOT domain experts, aware of the Mayo account.
 
 ### BEAT 2 — The unique data: internal CTMS (≈1.5 min)
 **[Type]:** `which of our sites is furthest behind target?`
-> *"Now it's on Mayo's INTERNAL operations — our sites, our enrollment vs target. And notice
+> *"Now it's on OUR INTERNAL operations — our sites, our enrollment vs target. And notice
 > it ranked by fill RATE, not headcount — it understands 'behind target' is a ratio. Under the
 > hood that's a natural-language-to-SQL layer, read-only, with two safety checks so a generated
 > query can never mutate data. I'll flag a decision there: I use a stronger model JUST for this
@@ -179,7 +179,7 @@ NOT domain experts, aware of the Mayo account.
 
 ### CLOSE (Slide 8)
 > *"Three live sources, grounded, our-accrual-vs-the-field in one shot, visualized on demand —
-> built around the Mayo account, and hardened by trying to break it. Next I'd take it to [your
+> built around the target account, and hardened by trying to break it. Next I'd take it to [your
 > 1–2 roadmap items]. I built this to show the concept is real and the engineering is sound —
 > and I'd like buy-in to take it further."*
 

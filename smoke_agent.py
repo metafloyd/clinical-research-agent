@@ -32,20 +32,20 @@ CASES = [
     ("how many active studies do we have",        [has("15"), absent("study 1", "study 2")]),
     ("how many completed studies do we have",     [has("7"), absent("study 1")]),
     # Alzheimer's → BOTH studies, no omission, no invented enrollment
-    ("what study are we doing related to alzheimers", [has("mayo-2023-022", "mayo-2023-041")]),
+    ("what study are we doing related to alzheimers", [has("prot-2023-022", "prot-2023-041")]),
     # study→PI and PI→studies (indirect-phrasing class)
     ("who is leading the donanemab trial",        [has("susan cole"), used("query_trial_operations")]),
-    ("what is Dr. Raj Patel researching",         [has("mayo-2023-007"), used("query_trial_operations")]),
+    ("what is Dr. Raj Patel researching",         [has("prot-2023-007"), used("query_trial_operations")]),
     # ROUTING: bare count → internal; condition count → public
     ("how many studies are recruiting",           [used("query_trial_operations"), not_used("clinicaltrials")]),
     ("how many recruiting trials are there for pancreatic cancer", [used("clinicaltrials")]),
-    # worst enrollment = fill rate (MAYO-2024-018 @ 46%), not raw count
-    ("which study has the worst enrollment",      [has("mayo-2024-018")]),
+    # worst enrollment = fill rate (PROT-2024-018 @ 46%), not raw count
+    ("which study has the worst enrollment",      [has("prot-2024-018")]),
     # cross-source: our 61 kept separate; both tools fire
     ("how does our enrollment on the donanemab trial compare to the field",
                                                   [has("61"), used("query_trial_operations"), used("clinicaltrials")]),
     # out-of-schema → declines, never fabricates studies
-    ("what is our trial budget",                  [absent("study 1", "mayo-2023")]),
+    ("what is our trial budget",                  [absent("study 1", "prot-2023")]),
     # CHART requests → route to the visualization tool (not the text query tool)
     ("chart our enrollment by site",              [used("plot_trial_operations")]),
     ("show the donanemab enrollment trend over time", [used("plot_trial_operations")]),

@@ -54,7 +54,7 @@
         } catch (e) {}
     }
 
-    // The app is themed for LIGHT mode only (brand is Mayo blue on light); dark mode
+    // The app is themed for LIGHT mode only (brand is deep blue on light); dark mode
     // renders half-broken. So: force light + hide the toggle (also rescues any session
     // already stuck in dark from a prior toggle).
     function forceLightTheme() {

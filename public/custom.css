@@ -156,7 +156,7 @@ textarea::placeholder {
     background: rgba(14, 50, 147, 0.06) !important;
     color: #0E3293 !important;
 }
-/* active / selected chat — Mayo-blue tint + left accent bar */
+/* active / selected chat — brand-blue tint + left accent bar */
 #thread-history [data-sidebar="menu-button"][data-active="true"] {
     background: rgba(14, 50, 147, 0.10) !important;
     color: #0E3293 !important;
