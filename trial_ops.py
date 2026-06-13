@@ -772,6 +772,9 @@ def _build_figure(spec: dict, cols, rows):
         # behind" reads at a glance instead of from the numbers. None for grouped/
         # non-enrollment bars → keep the brand palette unchanged.
         rag = _rag_bar_colors(cd, ys[0], cols) if len(ys) == 1 else None
+        # A fill-rate/percent axis has a meaningful fixed reference: 100% = target met.
+        pct_axis = bool(rag) and bool(
+            re.search(r"pct|percent|fill|_rate|of_target", ys[0].lower()))
         if horizontal:
             short = [l if len(l) <= 32 else l[:31] + "…" for l in labels]
             for i, y in enumerate(ys):
@@ -800,6 +803,14 @@ def _build_figure(spec: dict, cols, rows):
             title = ((title + "<br>") if title else "") + (
                 "<span style='font-size:11px;color:#6B7280'>🟢 on track (≥90% of "
                 "target)  ·  🟡 at risk (70–90%)  ·  🔴 behind (&lt;70%)</span>")
+        if pct_axis:
+            # Dashed reference line at 100% = enrollment target met. The bars read as
+            # distance from this line (target on the value axis: x for horizontal bars).
+            line = dict(x=100) if horizontal else dict(y=100)
+            (fig.add_vline if horizontal else fig.add_hline)(
+                line_dash="dash", line_color="#6B7280", line_width=1.5,
+                annotation_text="Target (100%)", annotation_position="top",
+                annotation_font=dict(size=10, color="#6B7280"), **line)
 
     fig.update_layout(title=dict(text=title, font=dict(size=16, color=_BRAND)),
                       template="plotly_white", colorway=_PALETTE,
