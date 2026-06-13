@@ -164,19 +164,19 @@ if os.getenv("DATABASE_URL"):
             return await super().create_step(step_dict)
 
         async def list_threads(self, pagination, filters):
-            # Keep the sidebar uncluttered: show only the 5 most recent chats.
+            # Keep the sidebar uncluttered: show only the 10 most recent chats.
             # (Older threads are NOT deleted — just not listed. Search is left
             # uncapped so users can still find anything.)
             searching = bool(getattr(filters, "search", None))
             if not searching:
                 try:
-                    pagination.first = 5
+                    pagination.first = 10
                 except Exception:
                     pass
             resp = await super().list_threads(pagination, filters)
             if not searching:
                 try:
-                    resp.data = resp.data[:5]
+                    resp.data = resp.data[:10]
                     resp.pageInfo.hasNextPage = False
                 except Exception:
                     pass
