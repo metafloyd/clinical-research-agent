@@ -623,6 +623,9 @@ def make_trial_ops_tool(db_path: str = TRIAL_OPS_DB_PATH) -> StructuredTool:
 _BRAND = "#0E3293"
 _PALETTE = ["#0E3293", "#3B82F6", "#60A5FA", "#93C5FD", "#10B981",
             "#F59E0B", "#EF4444", "#8B5CF6", "#14B8A6", "#6B7280"]
+# Red/Amber/Green for portfolio-health coloring (fill rate vs enrollment target).
+# Thresholds: on track ≥90% · at risk 70–90% · behind <70%.
+_RAG_GREEN, _RAG_AMBER, _RAG_RED = "#16A34A", "#F59E0B", "#DC2626"
 
 import json as _json
 
@@ -697,6 +700,35 @@ async def _generate_chart_spec(question: str) -> dict:
     return _json.loads(m.group(0))
 
 
+def _rag_bar_colors(cd, y, cols):
+    """Per-bar red/amber/green colors based on % of enrollment target, or None when this
+    chart carries no fill-rate signal (caller then keeps the brand palette). Render-only,
+    deterministic. Fires for single-series bars whose value is EITHER a fill-rate/percent
+    column OR a count that has a sibling target column to divide by."""
+    vals = cd.get(y, [])
+    if not vals:
+        return None
+    name = y.lower()
+    if re.search(r"pct|percent|fill|_rate|of_target", name):
+        pct = [v if isinstance(v, (int, float)) else None for v in vals]
+    else:
+        tcol = next((c for c in cols if "target" in c.lower() and c != y), None)
+        if not (tcol and re.search(r"enrol|count|^n_|_n$|num", name)):
+            return None
+        tvals = cd.get(tcol, [])
+        pct = [(e * 100.0 / t) if isinstance(e, (int, float))
+               and isinstance(t, (int, float)) and t else None
+               for e, t in zip(vals, tvals)]
+    if all(p is None for p in pct):
+        return None
+
+    def _c(p):
+        if p is None:
+            return _BRAND
+        return _RAG_RED if p < 70 else _RAG_AMBER if p < 90 else _RAG_GREEN
+    return [_c(p) for p in pct]
+
+
 def _build_figure(spec: dict, cols, rows):
     import plotly.graph_objects as go
     cd = {c: [r[i] for r in rows] for i, c in enumerate(cols)}
@@ -736,13 +768,17 @@ def _build_figure(spec: dict, cols, rows):
         # become slivers. Flip to HORIZONTAL bars in that case — titles read naturally
         # and the chart grows in height instead of squeezing.
         horizontal = len(labels) > 8 or (labels and max(len(l) for l in labels) > 24)
+        # Color single-series bars red/amber/green by fill rate vs target, so "who's
+        # behind" reads at a glance instead of from the numbers. None for grouped/
+        # non-enrollment bars → keep the brand palette unchanged.
+        rag = _rag_bar_colors(cd, ys[0], cols) if len(ys) == 1 else None
         if horizontal:
             short = [l if len(l) <= 32 else l[:31] + "…" for l in labels]
             for i, y in enumerate(ys):
                 fig.add_trace(go.Bar(y=short, x=cd[y], orientation="h",
                                      hovertext=labels,
                                      name=y.replace("_", " ").title(),
-                                     marker_color=_PALETTE[i % len(_PALETTE)]))
+                                     marker_color=(rag or _PALETTE[i % len(_PALETTE)])))
             row_px = 22 if len(ys) == 1 else 16 * len(ys)
             fig.update_layout(
                 barmode="group",
@@ -755,8 +791,15 @@ def _build_figure(spec: dict, cols, rows):
             for i, y in enumerate(ys):
                 fig.add_trace(go.Bar(x=labels, y=cd[y],
                                      name=y.replace("_", " ").title(),
-                                     marker_color=_PALETTE[i % len(_PALETTE)]))
+                                     marker_color=(rag or _PALETTE[i % len(_PALETTE)])))
             fig.update_layout(barmode="group")
+        if rag:
+            # one Bar trace with per-point colors — the auto legend swatch would be
+            # meaningless, so drop it and explain the colors in a title subline.
+            fig.update_layout(showlegend=False)
+            title = ((title + "<br>") if title else "") + (
+                "<span style='font-size:11px;color:#6B7280'>🟢 on track (≥90% of "
+                "target)  ·  🟡 at risk (70–90%)  ·  🔴 behind (&lt;70%)</span>")
 
     fig.update_layout(title=dict(text=title, font=dict(size=16, color=_BRAND)),
                       template="plotly_white", colorway=_PALETTE,
