@@ -23,7 +23,7 @@ from db import (
     upsert_user, create_session, set_session_title,
     save_message,
 )
-from questions import QUESTION_POOL
+from questions import starter_pairs
 from research_agent import build_agent
 
 
@@ -250,14 +250,15 @@ def oauth_callback(
 
 @cl.set_starters
 async def set_starters():
-    # Deterministic: always the 4 SHOWCASE starters, same order — the landing
-    # screen is identical on every reload (demo predictability over variety).
+    # questions.starter_pairs() honors the MODE flag: "rotate" (a balanced one-per-
+    # capability draw that varies per load) for exploration, or "static" (the fixed
+    # demo four) on demo day.
     return [
         cl.Starter(
             label=f"{badge} {q}",
             message=q,
         )
-        for badge, q in QUESTION_POOL[:4]
+        for badge, q in starter_pairs()
     ]
 
 
