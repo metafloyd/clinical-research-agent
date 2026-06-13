@@ -645,6 +645,16 @@ but couldn't apply it the way they implied, or you picked a sensible default for
 request. State WHAT you did and offer how to narrow. Omit it (null) when the chart is a \
 straightforward match. Example: "A funnel shows one screening pipeline across all studies, \
 so it can't split by area — here's our overall funnel; ask for a specific area to filter it."
+  "projection": (optional) set true ONLY when the user asks whether a SINGLE study will \
+HIT / REACH / MAKE its enrollment target, is ON PACE / ON TRACK to finish, or wants a \
+FORECAST / PROJECTION to the planned end date. Then chart_type MUST be "line" and the SQL \
+MUST be that one study's monthly trend that ALSO selects its target_enrollment AS target and \
+its planned_end_date (constant columns the forecast needs), e.g.:
+  SELECT e.as_of_date, SUM(e.enrolled) AS enrolled, s.target_enrollment AS target, \
+s.planned_end_date AS planned_end_date FROM enrollment e JOIN studies s ON \
+s.internal_id = e.internal_id WHERE s.title LIKE '%Donanemab%' GROUP BY e.as_of_date \
+ORDER BY e.as_of_date. Omit it (null) for an ORDINARY trend ("trend / over time / velocity" \
+with NO hit-target/on-pace/forecast wording) — a plain trend must NOT set projection.
 
 {SCHEMA_DESCRIPTION}
 
@@ -729,6 +739,68 @@ def _rag_bar_colors(cd, y, cols):
     return [_c(p) for p in pct]
 
 
+def _project_enrollment(cd, x_col, y_col):
+    """Deterministic linear enrollment forecast for a SINGLE-study monthly trend. Returns a
+    dict of projection facts, or None when the data can't support a forecast (caller then
+    renders an ordinary trend). No arithmetic by the model, no external deps — the chart
+    overlay AND the insight sentence both read these exact numbers."""
+    import math
+    xs = cd.get(x_col) or next((v for c, v in cd.items()
+                                if re.search(r"date|month|as_of", c.lower())), [])
+    ys = cd.get(y_col) or next((v for c, v in cd.items()
+                                if re.search(r"enrol", c.lower())), [])
+
+    def _mi(ym):                       # 'YYYY-MM' -> absolute month index
+        return int(ym[:4]) * 12 + (int(ym[5:7]) - 1)
+
+    pts = sorted(((str(x)[:7], y) for x, y in zip(xs, ys)
+                  if isinstance(y, (int, float)) and re.match(r"\d{4}-\d{2}", str(x or ""))),
+                 key=lambda p: _mi(p[0]))
+    if len(pts) < 3:
+        return None
+    base = _mi(pts[0][0])
+    months = [_mi(p[0]) - base for p in pts]
+    vals = [p[1] for p in pts]
+    last_m, last_v = months[-1], vals[-1]
+    w = min(6, len(pts) - 1)           # velocity = slope over the last <=6 months
+    dm = months[-1] - months[-1 - w]
+    vel = ((vals[-1] - vals[-1 - w]) / dm) if dm else 0.0
+
+    def _const(pat, numeric):
+        for c, series in cd.items():
+            if re.search(pat, c.lower()):
+                for v in series:
+                    if numeric and isinstance(v, (int, float)):
+                        return v
+                    if not numeric and isinstance(v, str) and re.match(r"\d{4}-\d{2}", v):
+                        return v[:7]
+        return None
+
+    target = _const(r"target", True)
+    end_ym = _const(r"planned_end|end_date", False)
+    if end_ym:
+        end_off = _mi(end_ym) - base
+    elif target and vel > 0:
+        end_off = last_m + math.ceil((target - last_v) / vel)
+    else:
+        end_off = last_m + 12
+    end_off = min(end_off, last_m + 36)          # cap runaway extrapolation
+    if end_off <= last_m:
+        return None                              # planned end already passed
+
+    def _ym1(off):                               # month offset -> 'YYYY-MM-01'
+        idx = base + off
+        return f"{idx // 12:04d}-{idx % 12 + 1:02d}-01"
+
+    proj_x = [_ym1(m) for m in range(last_m + 1, end_off + 1)]
+    proj_y = [last_v + vel * (m - last_m) for m in range(last_m + 1, end_off + 1)]
+    at_end = proj_y[-1] if proj_y else last_v
+    return {"target": target, "end_ym": end_ym, "velocity": vel,
+            "proj_x": proj_x, "proj_y": proj_y, "proj_at_end": at_end,
+            "meets_target": target is not None and at_end >= target,
+            "last_v": last_v, "last_x": _ym1(last_m)}
+
+
 def _build_figure(spec: dict, cols, rows):
     import plotly.graph_objects as go
     cd = {c: [r[i] for r in rows] for i, c in enumerate(cols)}
@@ -761,6 +833,39 @@ def _build_figure(spec: dict, cols, rows):
                 fig.add_trace(go.Scatter(x=cd.get(x, []), y=cd[y], mode="lines+markers",
                                          name=y.replace("_", " ").title(),
                                          line=dict(color=_PALETTE[i % len(_PALETTE)])))
+            # Forecast overlay: dashed velocity extrapolation to the planned end, a target
+            # line, and a deterministic on-pace / behind verdict in the title subline. Only
+            # when the spec asked for it AND the data supports it (else ordinary trend).
+            proj = _project_enrollment(cd, x, ys[0]) if spec.get("projection") else None
+            if proj:
+                fig.add_trace(go.Scatter(
+                    x=[proj["last_x"]] + proj["proj_x"],
+                    y=[proj["last_v"]] + proj["proj_y"], mode="lines", name="Projected",
+                    line=dict(color="#6B7280", dash="dash", width=2)))
+                if proj["target"] is not None:
+                    fig.add_hline(
+                        y=proj["target"], line_dash="dot", line_width=1.5,
+                        line_color=(_RAG_GREEN if proj["meets_target"] else _RAG_RED),
+                        annotation_text=f"Target {int(proj['target'])}",
+                        annotation_position="top left",
+                        annotation_font=dict(size=10, color="#6B7280"))
+                if proj["end_ym"]:
+                    fig.add_vline(
+                        x=proj["end_ym"] + "-01", line_dash="dot",
+                        line_color="#6B7280", line_width=1, annotation_text="Planned end",
+                        annotation_position="top",
+                        annotation_font=dict(size=10, color="#6B7280"))
+                if proj["target"] is not None:
+                    end = int(round(proj["proj_at_end"]))
+                    if proj["meets_target"]:
+                        v = f"🟢 On pace — projected ≈{end} vs target {int(proj['target'])}"
+                    else:
+                        gap = int(round(proj["target"] - proj["proj_at_end"]))
+                        v = (f"🔴 Behind pace — projected ≈{end}, ~{gap} short of "
+                             f"target {int(proj['target'])}")
+                    title = ((title + "<br>") if title else "") + (
+                        f"<span style='font-size:11px;color:#6B7280'>{v} "
+                        "at current velocity</span>")
     else:  # bar / grouped bar (default)
         labels = ["" if v is None else str(v) for v in cd.get(x, [])]
         # Many categories or long labels (e.g. 22 study titles) make VERTICAL bars
@@ -849,8 +954,22 @@ async def _plot_answer(question: str, db_path: str):
         f'reply with this clause, rephrased naturally, BEFORE the insight: "{note}". Then add '
         f'the insight sentence.\n' if note else ""
     )
+    # Forecast verdict: feed the model the SAME deterministic numbers the chart drew, so its
+    # sentence matches the picture and invents nothing.
+    proj_line = ""
+    if spec.get("projection"):
+        cd = {c: [r[i] for r in rows] for i, c in enumerate(cols)}
+        yk = spec.get("y"); yk = yk[0] if isinstance(yk, list) else yk
+        p = _project_enrollment(cd, spec.get("x"), yk)
+        if p and p["target"] is not None:
+            verdict = "ON PACE to meet" if p["meets_target"] else "projected to FALL SHORT of"
+            proj_line = (
+                f"PROJECTION (deterministic, at current velocity — state THESE numbers, "
+                f"invent no others): projected ≈{int(round(p['proj_at_end']))} enrolled by "
+                f"the planned end{f' ({p['end_ym']})' if p['end_ym'] else ''} versus a target of "
+                f"{int(p['target'])} — {verdict} target.\n")
     summary = (
-        note_line +
+        note_line + proj_line +
         f"A {spec.get('chart_type', 'bar')} chart titled \"{spec.get('title', '')}\" has "
         "been rendered for the user from OUR internal trial-operations data. Add ONE short "
         "sentence of insight using ONLY the exact category labels and numbers in the data "
