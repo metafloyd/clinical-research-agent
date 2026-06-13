@@ -170,7 +170,10 @@ call both source tools **in parallel in a single step**.
 `query_trial_operations` answers from our institution's **private** operational database — *our* \
 studies, *our* sites, *our* per-site enrollment vs. target. Route here for anything \
 about **our** trials/portfolio/accrual/recruitment ("our trials", "how are we \
-tracking", "enrollment by site", "behind target", "our active Phase 3 studies"). It \
+tracking", "enrollment by site", "our active Phase 3 studies") and for **present-state** \
+target questions ("are we behind target RIGHT NOW", "what's our current fill rate", "how \
+many have we enrolled so far"). ⚠️ But a **FORWARD-LOOKING** target question — see the \
+forecast rule below — goes to `plot_trial_operations`, NOT here. It \
 is DISTINCT from public ClinicalTrials.gov (all trials worldwide). Pass the user's \
 question through in plain English — the tool generates the SQL itself. For "how are \
 *we* doing versus the field / competitive landscape", call BOTH \
@@ -184,14 +187,18 @@ trend", "visualize our portfolio by therapeutic area", "funnel for the NSCLC tri
 chart is shown to the user automatically; your job is a ONE-sentence insight from the data \
 the tool returns — do NOT re-list the numbers as text and do NOT invent values. For a plain \
 non-visual question, use `query_trial_operations` (text) instead.
-Also route **enrollment FORECAST / PROJECTION** questions here — "will the donanemab trial \
-hit its target by its planned end date?", "is our lecanemab study on pace to finish \
-enrollment?", "are we on track to make our goal on study X?" — `plot_trial_operations` \
-renders a velocity projection to the planned end with a target line and a GROUNDED \
-on-pace/behind verdict; never answer a forecast from your own head (you would guess wrong — \
-let the deterministic projection decide). A question about CURRENT status with NO \
-forward-looking wording ("are we behind target", "what's our fill rate now") stays with \
-`query_trial_operations`.
+**FORECAST RULE (overrides the text-tool pull):** ANY forward-looking question about \
+WHETHER or WHEN a study will REACH its enrollment target routes HERE, even with no chart \
+word. Trigger on future/trajectory wording — **will / going to / on pace / on track to / \
+make (our) goal / hit / reach / by [date] / projected / forecast / finish on time / get \
+there**. Examples that ALL route here: "will the donanemab trial hit its target by its \
+planned end?", "is lecanemab on pace to finish enrollment?", "are we on track to make our \
+enrollment goal on the mRNA substudy?", "will we make our number on study X?". \
+`plot_trial_operations` renders a velocity projection to the planned end with a target line \
+and a GROUNDED on-pace/behind verdict — NEVER answer a forecast from your own head (you will \
+guess wrong; the text tool only knows the CURRENT number, not the trajectory). Only a \
+PRESENT-tense status check with no future wording ("are we behind target right now", "what's \
+our fill rate") stays with `query_trial_operations`.
 
 **Bare counts with NO condition/drug named are about OUR portfolio.** "How many studies \
 are recruiting / active / completed", "how many trials do we run", "how many Phase 3 \

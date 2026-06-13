@@ -84,6 +84,10 @@ CASES = [
          absent("likely to hit", "on track to meet")]),
     ("chart-forecast-pace", "is our lecanemab study on pace to finish enrollment",
         [used("plot_trial_operations")]),
+    # "on track to make our goal" (no chart verb, no "hit target") — the phrasing that
+    # leaked to the text tool until the FORECAST RULE was made principle-based.
+    ("chart-forecast-ontrack", "are we on track to make our enrollment goal on the mRNA vaccine substudy",
+        [used("plot_trial_operations")]),
     # CONTROL: a CURRENT-status question (no forecast wording) stays TEXT, not the chart.
     ("int-current-status", "are we currently behind target on donanemab",
         [used("query_trial_operations"), not_used("plot")]),
