@@ -77,6 +77,16 @@ CASES = [
         [used("plot_trial_operations")]),
     ("chart-plot-verb", "plot how many patients we have at each site",
         [used("plot_trial_operations")]),
+    # FORECAST (no chart verb) must route to the projection chart, NOT the text tool, and
+    # the verdict must match the deterministic projection (donanemab lands ~71 vs 75 = behind).
+    ("chart-forecast-behind", "will the donanemab trial hit its target by its planned end date",
+        [used("plot_trial_operations"), has_any("71", "fall short", "behind", "short of"),
+         absent("likely to hit", "on track to meet")]),
+    ("chart-forecast-pace", "is our lecanemab study on pace to finish enrollment",
+        [used("plot_trial_operations")]),
+    # CONTROL: a CURRENT-status question (no forecast wording) stays TEXT, not the chart.
+    ("int-current-status", "are we currently behind target on donanemab",
+        [used("query_trial_operations"), not_used("plot")]),
 
     # ───────── NO-TOOL: concept / greeting must not hit a data tool ─────────
     ("none-concept", "what is a phase 3 clinical trial",
