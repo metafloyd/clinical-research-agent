@@ -661,6 +661,15 @@ with NO hit-target/on-pace/forecast wording) — a plain trend must NOT set proj
 Chart guidance:
 - "enrollment by study / by site", "enrolled vs target" → "bar", x = the NAME column \
 (site_name or study title — friendly labels, never raw IDs), y = ["enrolled","target"].
+- "fill rate / % of target / how full / ranked by fill rate / how each is tracking as a %" \
+→ "bar" with a SINGLE percent column, x = the NAME column, y = "pct_of_target". The value \
+MUST be a PERCENTAGE 0–100 (multiply by 100.0), aggregated PER study (or per site), using \
+enrollment_current and GROUP BY — NEVER a raw 0–1 fraction and NEVER one site row over the \
+whole-study target. Use exactly this shape (one row per study):
+  SELECT s.title, ROUND(SUM(ec.enrolled) * 100.0 / SUM(ec.target), 1) AS pct_of_target \
+FROM enrollment_current ec JOIN studies s ON s.internal_id = ec.internal_id \
+GROUP BY s.internal_id ORDER BY pct_of_target DESC
+  (for sites: GROUP BY ec.site_id, x = si.site_name via a join to sites).
 - "trend / over time / month by month / velocity" → "line", x = as_of_date (use the raw \
 `enrollment` time series, GROUP BY as_of_date), y = "enrolled", color = the study title \
 if comparing multiple studies.
@@ -876,6 +885,15 @@ def _build_figure(spec: dict, cols, rows):
         # Color single-series bars red/amber/green by fill rate vs target, so "who's
         # behind" reads at a glance instead of from the numbers. None for grouped/
         # non-enrollment bars → keep the brand palette unchanged.
+        # Defensive: if a fill-rate/percent column ever arrives as a 0–1 FRACTION (model
+        # SQL slip), every bar would read <70% (all red) and the 100% line would sit off the
+        # chart. Normalize to 0–100 so the picture is right regardless — fill rate is never
+        # legitimately ≤1.5%. (The chart-spec prompt also mandates percentages.)
+        if len(ys) == 1 and re.search(r"pct|percent|fill|_rate|of_target", ys[0].lower()):
+            vv = [v for v in cd.get(ys[0], []) if isinstance(v, (int, float))]
+            if vv and max(vv) <= 1.5:
+                cd[ys[0]] = [round(v * 100, 1) if isinstance(v, (int, float)) else v
+                             for v in cd[ys[0]]]
         rag = _rag_bar_colors(cd, ys[0], cols) if len(ys) == 1 else None
         # A fill-rate/percent axis has a meaningful fixed reference: 100% = target met.
         pct_axis = bool(rag) and bool(

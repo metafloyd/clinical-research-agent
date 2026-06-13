@@ -71,6 +71,23 @@ def main():
     check("guard: <3 points returns None",
           t._project_enrollment(_cd(short), "as_of_date", "enrolled") is None)
 
+    # 7) Fill-rate normalization: a 0-1 fraction pct column must render as 0-100 (so bars
+    #    aren't all red with the 100% line off-screen — the live bug from a model SQL slip).
+    frac_cols = ["title", "pct_of_target"]
+    frac_rows = [("A", 0.46), ("B", 0.81), ("C", 1.01)]   # fractions, not percentages
+    figf = t._build_figure({"chart_type": "bar", "x": "title", "y": "pct_of_target",
+                            "title": "Fill rate"}, frac_cols, frac_rows)
+    bar_vals = list(figf.data[0].y if figf.data[0].orientation != "h" else figf.data[0].x)
+    check("fill-rate: 0-1 fraction normalized to 0-100", max(bar_vals) > 90)
+    colors = figf.data[0].marker.color
+    check("fill-rate: RAG mix after normalization (not all red)",
+          isinstance(colors, (list, tuple)) and t._RAG_GREEN in colors and t._RAG_RED in colors)
+    # already-percentage values must pass through unchanged
+    figp = t._build_figure({"chart_type": "bar", "x": "title", "y": "pct_of_target",
+                            "title": "Fill rate"}, frac_cols, [("A", 46.0), ("B", 81.0)])
+    pv = list(figp.data[0].y if figp.data[0].orientation != "h" else figp.data[0].x)
+    check("fill-rate: 0-100 values pass through unchanged", max(pv) == 81.0)
+
     print(f"\n{passed}/{passed + failed} passed.")
     return failed == 0
 
